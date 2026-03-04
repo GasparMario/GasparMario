@@ -33,7 +33,7 @@ export default function AdminPage() {
   const [editingColorId, setEditingColorId] = useState<string | null>(null);
   const [sizesInput, setSizesInput] = useState("P,M,G");
   const [productName, setProductName] = useState("Produto Exemplo");
-  const [parentSku, setParentSku] = useState("PROD-001");
+  const [parentSku, setParentSku] = useState("100001");
   const [selectedColorIds, setSelectedColorIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -145,12 +145,21 @@ export default function AdminPage() {
   );
 
   function handleExport() {
+    setError(null);
+
+    const skuBase = parentSku.trim();
+    if (!/^\d+$/.test(skuBase)) {
+      setError("SKU do pai deve ser numérico (ex: 100001)");
+      return;
+    }
+
     const sizes = sizesInput
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
 
-    const parentImages = Array.from(new Set(selectedColors.map((c) => c.image_url).filter(Boolean) as string[]));
+    const orderedColors = [...selectedColors].sort((a, b) => a.slug.localeCompare(b.slug));
+    const parentImages = Array.from(new Set(orderedColors.map((c) => c.image_url).filter(Boolean) as string[]));
 
     const headers = [
       "Type",
@@ -167,32 +176,36 @@ export default function AdminPage() {
     const rows: string[][] = [
       [
         "variable",
-        parentSku,
+        skuBase,
         productName,
         "",
         "pa_cor",
-        selectedColors.map((c) => c.name).join(","),
+        orderedColors.map((c) => c.name).join(","),
         "pa_tamanho",
         sizes.join(","),
         parentImages.join(",")
       ]
     ];
 
-    for (const color of selectedColors) {
-      for (const size of sizes) {
-        rows.push([
-          "variation",
-          `${parentSku}-${color.slug}-${size}`,
-          `${productName} - ${color.name} - ${size}`,
-          parentSku,
-          "pa_cor",
-          color.name,
-          "pa_tamanho",
-          size,
-          color.image_url || ""
-        ]);
-      }
-    }
+    const orderedVariations = orderedColors
+      .flatMap((color) => sizes.map((size) => ({ color, size })))
+      .sort((a, b) => `${a.color.slug}::${a.size}`.localeCompare(`${b.color.slug}::${b.size}`));
+
+    orderedVariations.forEach(({ color, size }, index) => {
+      const suffix = String(index + 1).padStart(2, "0");
+
+      rows.push([
+        "variation",
+        `${skuBase}${suffix}`,
+        `${productName} - ${color.name} - ${size}`,
+        skuBase,
+        "pa_cor",
+        color.name,
+        "pa_tamanho",
+        size,
+        color.image_url || ""
+      ]);
+    });
 
     const csv = [headers, ...rows]
       .map((line) => line.map((v) => escapeCsv(v)).join(","))
