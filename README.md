@@ -59,8 +59,6 @@ Acesse: `http://localhost:3000/admin`
 
 ## Geração de SKU (`/api/sku/next`)
 
-A rota `GET /api/sku/next` usa RPC `next_sku` no Supabase e retorna `{"sku": "100001"}` (string **numérica**, sem prefixo). Ela foi marcada como **dinâmica** (`force-dynamic`) com `Cache-Control: no-store` para evitar cache de resposta em produção (ex.: Vercel).
-
 Se local funciona e no Vercel não, normalmente é um destes pontos:
 
 - cache indevido em rota `GET` (retornando o mesmo SKU);

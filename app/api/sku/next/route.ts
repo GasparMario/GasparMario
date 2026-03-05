@@ -35,12 +35,13 @@ export async function GET() {
     }
 
     const rpcData = data as NextSkuRpcResponse;
+
     const rawValue =
       rpcData == null
         ? null
         : typeof rpcData === "object"
-          ? (rpcData.next_sku ?? null)
-          : rpcData;
+        ? rpcData.next_sku ?? null
+        : rpcData;
 
     if (rawValue == null) {
       return NextResponse.json(
