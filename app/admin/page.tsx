@@ -34,6 +34,10 @@ function normalizeDecimal(value: string): string {
   return cleaned.replace(/\s+/g, "").replace(",", ".");
 }
 
+function quoteCsvString(value: string) {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
 export default function AdminPage() {
   const [colors, setColors] = useState<Color[]>([]);
   const [name, setName] = useState("");
@@ -208,8 +212,15 @@ export default function AdminPage() {
       "Parent",
       "Attribute 1 name",
       "Attribute 1 value(s)",
+      "Attribute 1 visible",
+      "Attribute 1 global",
       "Attribute 2 name",
       "Attribute 2 value(s)",
+      "Attribute 2 visible",
+      "Attribute 2 global",
+      "In stock?",
+      "Manage stock?",
+      "Stock",
       "Images"
     ];
 
@@ -222,9 +233,16 @@ export default function AdminPage() {
         normalizedWeight,
         "",
         "pa_cor",
-        orderedColors.map((c) => c.name).join(","),
+        orderedColors.map((c) => c.slug).join(","),
+        "1",
+        "1",
         "pa_tamanho",
         sizes.join(","),
+        "1",
+        "1",
+        "",
+        "",
+        "",
         parentImages.join(",")
       ]
     ];
@@ -242,15 +260,34 @@ export default function AdminPage() {
         normalizedWeight,
         skuBase,
         "pa_cor",
-        color.name,
+        color.slug,
+        "1",
+        "1",
         "pa_tamanho",
         size,
+        "1",
+        "1",
+        "1",
+        "0",
+        "",
         color.image_url || ""
       ]);
     });
 
+    // Forçar SKU e Parent como string no CSV (evita interpretação numérica indevida)
+    const forceQuotedColumns = new Set([1, 5]); // SKU e Parent
+
     const csv = [headers, ...rows]
-      .map((line) => line.map((v) => escapeCsv(v)).join(","))
+      .map((line, rowIndex) =>
+        line
+          .map((v, columnIndex) => {
+            if (rowIndex > 0 && forceQuotedColumns.has(columnIndex) && v) {
+              return quoteCsvString(v);
+            }
+            return escapeCsv(v);
+          })
+          .join(",")
+      )
       .join("\n");
 
     downloadCsv("woocommerce-import.csv", csv);
@@ -354,10 +391,18 @@ export default function AdminPage() {
                     </td>
                     <td>
                       <div className={styles.buttonRow}>
-                        <button className={`${styles.btn} ${styles.btnMuted}`} type="button" onClick={() => startEdit(color)}>
+                        <button
+                          className={`${styles.btn} ${styles.btnMuted}`}
+                          type="button"
+                          onClick={() => startEdit(color)}
+                        >
                           Editar
                         </button>
-                        <button className={`${styles.btn} ${styles.btnDanger}`} type="button" onClick={() => handleDeleteColor(color.id)}>
+                        <button
+                          className={`${styles.btn} ${styles.btnDanger}`}
+                          type="button"
+                          onClick={() => handleDeleteColor(color.id)}
+                        >
                           Excluir
                         </button>
                       </div>
@@ -422,7 +467,9 @@ export default function AdminPage() {
             </label>
           </div>
 
-          <p className={styles.muted}>Variações seguem ordem estável: cor.slug + tamanho. SKU filho = SKU pai + sufixo de 2 dígitos.</p>
+          <p className={styles.muted}>
+            Variações seguem ordem estável: cor.slug + tamanho. SKU filho = SKU pai + sufixo de 2 dígitos.
+          </p>
 
           <button className={`${styles.btn} ${styles.btnPrimary}`} type="button" onClick={handleExport}>
             Exportar CSV WooCommerce

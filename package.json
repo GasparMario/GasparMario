@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:sku": "tsc -p tsconfig.tests.json && node .test-dist/tests/sku.test.js",
+    "test": "npm run test:sku"
   },
   "dependencies": {
     "next": "14.2.5",
