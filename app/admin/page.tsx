@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./admin.module.css";
 import { buildOrderedVariations } from "@/lib/sku";
 
@@ -43,14 +43,23 @@ export default function AdminPage() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [editingColorId, setEditingColorId] = useState<string | null>(null);
+
+  // Mantém pré-preenchido (você pediu)
   const [sizesInput, setSizesInput] = useState("P,M,G");
-  const [productName, setProductName] = useState("Produto Exemplo");
-  const [parentSku, setParentSku] = useState("100001");
+
+  // Começa vazio (evita export com "exemplo" sem querer)
+  const [productName, setProductName] = useState("");
+  const [parentSku, setParentSku] = useState("");
+
   const [priceInput, setPriceInput] = useState("");
   const [weightInput, setWeightInput] = useState("");
+
   const [selectedColorIds, setSelectedColorIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isGeneratingSku, setIsGeneratingSku] = useState(false);
+
+  // Evita gerar SKU em loop
+  const didAutoSkuRef = useRef(false);
 
   async function loadColors() {
     const res = await fetch("/api/colors", { cache: "no-store" });
@@ -64,6 +73,17 @@ export default function AdminPage() {
   useEffect(() => {
     loadColors().catch((err) => setError(err.message));
   }, []);
+
+  // Auto-gerar SKU ao abrir a página (1 vez), só se estiver vazio
+  useEffect(() => {
+    if (didAutoSkuRef.current) return;
+    if (parentSku.trim()) return;
+
+    didAutoSkuRef.current = true;
+    // não precisa await
+    handleGenerateNextSku();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parentSku]);
 
   async function handleCreateColor(e: React.FormEvent) {
     e.preventDefault();
@@ -186,7 +206,23 @@ export default function AdminPage() {
   function handleExport() {
     setError(null);
 
+    const trimmedProductName = productName.trim();
+    if (!trimmedProductName) {
+      setError("Informe o nome do produto.");
+      return;
+    }
+
+    if (!sizesInput.trim()) {
+      setError("Informe os tamanhos (ex: P,M,G).");
+      return;
+    }
+
     const skuBase = parentSku.trim();
+    if (!skuBase) {
+      setError("Informe o SKU do pai ou aguarde o SKU automático.");
+      return;
+    }
+
     if (!/^\d+$/.test(skuBase)) {
       setError("SKU do pai deve ser numérico (ex: 100001)");
       return;
@@ -228,7 +264,7 @@ export default function AdminPage() {
       [
         "variable",
         skuBase,
-        productName,
+        trimmedProductName,
         normalizedPrice,
         normalizedWeight,
         "",
@@ -255,7 +291,7 @@ export default function AdminPage() {
       rows.push([
         "variation",
         `${skuBase}${suffix}`,
-        `${productName} - ${color.name} - ${size}`,
+        `${trimmedProductName} - ${color.name} - ${size}`,
         normalizedPrice,
         normalizedWeight,
         skuBase,
@@ -391,18 +427,10 @@ export default function AdminPage() {
                     </td>
                     <td>
                       <div className={styles.buttonRow}>
-                        <button
-                          className={`${styles.btn} ${styles.btnMuted}`}
-                          type="button"
-                          onClick={() => startEdit(color)}
-                        >
+                        <button className={`${styles.btn} ${styles.btnMuted}`} type="button" onClick={() => startEdit(color)}>
                           Editar
                         </button>
-                        <button
-                          className={`${styles.btn} ${styles.btnDanger}`}
-                          type="button"
-                          onClick={() => handleDeleteColor(color.id)}
-                        >
+                        <button className={`${styles.btn} ${styles.btnDanger}`} type="button" onClick={() => handleDeleteColor(color.id)}>
                           Excluir
                         </button>
                       </div>
@@ -423,13 +451,23 @@ export default function AdminPage() {
           <div className={styles.formGrid}>
             <label className={styles.label}>
               Nome do produto
-              <input className={styles.input} value={productName} onChange={(e) => setProductName(e.target.value)} />
+              <input
+                className={styles.input}
+                value={productName}
+                onChange={(e) => setProductName(e.target.value)}
+                placeholder="Ex: Camiseta Lisa Premium"
+              />
             </label>
 
             <label className={styles.label}>
               SKU do pai
               <div className={styles.skuRow}>
-                <input className={styles.input} value={parentSku} onChange={(e) => setParentSku(e.target.value)} />
+                <input
+                  className={styles.input}
+                  value={parentSku}
+                  onChange={(e) => setParentSku(e.target.value)}
+                  placeholder="SKU automático (ou clique em Gerar próximo)"
+                />
                 <button
                   className={`${styles.btn} ${styles.btnMuted}`}
                   type="button"
