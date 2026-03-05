@@ -28,11 +28,14 @@ function downloadCsv(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-
 function normalizeDecimal(value: string): string {
   const cleaned = value.trim();
   if (!cleaned) return "";
   return cleaned.replace(/\s+/g, "").replace(",", ".");
+}
+
+function quoteCsvString(value: string) {
+  return `"${value.replace(/"/g, '""')}"`;
 }
 
 export default function AdminPage() {
@@ -271,11 +274,8 @@ export default function AdminPage() {
       ]);
     });
 
+    // Forçar SKU e Parent como string no CSV (evita interpretação numérica indevida)
     const forceQuotedColumns = new Set([1, 5]); // SKU e Parent
-
-    function quoteCsvString(value: string) {
-      return `"${value.replace(/"/g, '""')}"`;
-    }
 
     const csv = [headers, ...rows]
       .map((line, rowIndex) =>
@@ -352,7 +352,11 @@ export default function AdminPage() {
                         onChange={(e) => {
                           const checked = e.target.checked;
                           setSelectedColorIds((prev) =>
-                            checked ? (prev.includes(color.id) ? prev : [...prev, color.id]) : prev.filter((id) => id !== color.id)
+                            checked
+                              ? prev.includes(color.id)
+                                ? prev
+                                : [...prev, color.id]
+                              : prev.filter((id) => id !== color.id)
                           );
                         }}
                       />
@@ -361,8 +365,19 @@ export default function AdminPage() {
                     <td>{color.slug}</td>
                     <td>
                       {color.image_url ? (
-                        <a className={styles.thumbLink} href={color.image_url} target="_blank" rel="noreferrer" title="Abrir imagem em nova aba">
-                          <img className={styles.thumbImage} src={color.image_url} alt={`Imagem da cor ${color.name}`} loading="lazy" />
+                        <a
+                          className={styles.thumbLink}
+                          href={color.image_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Abrir imagem em nova aba"
+                        >
+                          <img
+                            className={styles.thumbImage}
+                            src={color.image_url}
+                            alt={`Imagem da cor ${color.name}`}
+                            loading="lazy"
+                          />
                         </a>
                       ) : (
                         <span className={styles.muted}>sem imagem</span>
@@ -376,10 +391,18 @@ export default function AdminPage() {
                     </td>
                     <td>
                       <div className={styles.buttonRow}>
-                        <button className={`${styles.btn} ${styles.btnMuted}`} type="button" onClick={() => startEdit(color)}>
+                        <button
+                          className={`${styles.btn} ${styles.btnMuted}`}
+                          type="button"
+                          onClick={() => startEdit(color)}
+                        >
                           Editar
                         </button>
-                        <button className={`${styles.btn} ${styles.btnDanger}`} type="button" onClick={() => handleDeleteColor(color.id)}>
+                        <button
+                          className={`${styles.btn} ${styles.btnDanger}`}
+                          type="button"
+                          onClick={() => handleDeleteColor(color.id)}
+                        >
                           Excluir
                         </button>
                       </div>
@@ -407,7 +430,12 @@ export default function AdminPage() {
               SKU do pai
               <div className={styles.skuRow}>
                 <input className={styles.input} value={parentSku} onChange={(e) => setParentSku(e.target.value)} />
-                <button className={`${styles.btn} ${styles.btnMuted}`} type="button" onClick={handleGenerateNextSku} disabled={isGeneratingSku}>
+                <button
+                  className={`${styles.btn} ${styles.btnMuted}`}
+                  type="button"
+                  onClick={handleGenerateNextSku}
+                  disabled={isGeneratingSku}
+                >
                   {isGeneratingSku ? "Gerando..." : "Gerar próximo"}
                 </button>
               </div>
@@ -420,16 +448,28 @@ export default function AdminPage() {
 
             <label className={styles.label}>
               Preço (R$)
-              <input className={styles.input} value={priceInput} onChange={(e) => setPriceInput(e.target.value)} placeholder="79,90" />
+              <input
+                className={styles.input}
+                value={priceInput}
+                onChange={(e) => setPriceInput(e.target.value)}
+                placeholder="79,90"
+              />
             </label>
 
             <label className={styles.label}>
               Peso (kg)
-              <input className={styles.input} value={weightInput} onChange={(e) => setWeightInput(e.target.value)} placeholder="0,25" />
+              <input
+                className={styles.input}
+                value={weightInput}
+                onChange={(e) => setWeightInput(e.target.value)}
+                placeholder="0,25"
+              />
             </label>
           </div>
 
-          <p className={styles.muted}>Variações seguem ordem estável: cor.slug + tamanho. SKU filho = SKU pai + sufixo de 2 dígitos.</p>
+          <p className={styles.muted}>
+            Variações seguem ordem estável: cor.slug + tamanho. SKU filho = SKU pai + sufixo de 2 dígitos.
+          </p>
 
           <button className={`${styles.btn} ${styles.btnPrimary}`} type="button" onClick={handleExport}>
             Exportar CSV WooCommerce
