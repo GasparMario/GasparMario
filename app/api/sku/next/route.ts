@@ -1,18 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
+import { extractNextSkuRpcValue, normalizeNumericSku } from "@/lib/sku";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-type NextSkuRpcResponse = number | string | { next_sku?: number | string } | null;
-
-function normalizeNumericSku(raw: number | string) {
-  const value = String(raw).trim();
-  if (!value) return null;
-  if (!/^\d+$/.test(value)) return null;
-  return value;
-}
 
 export async function GET() {
   try {
@@ -34,14 +26,7 @@ export async function GET() {
       );
     }
 
-    const rpcData = data as NextSkuRpcResponse;
-
-    const rawValue =
-      rpcData == null
-        ? null
-        : typeof rpcData === "object"
-        ? rpcData.next_sku ?? null
-        : rpcData;
+    const rawValue = extractNextSkuRpcValue(data);
 
     if (rawValue == null) {
       return NextResponse.json(
