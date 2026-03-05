@@ -13,4 +13,3 @@ Crie `.env.local`:
 ```bash
 SUPABASE_URL=https://<project-ref>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
-SUPABASE_STORAGE_BUCKET=product-colors
