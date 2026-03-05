@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import styles from "./admin.module.css";
+import { buildOrderedVariations } from "@/lib/sku";
 
 type Color = {
   id: string;
@@ -26,6 +28,13 @@ function downloadCsv(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
+
+function normalizeDecimal(value: string): string {
+  const cleaned = value.trim();
+  if (!cleaned) return "";
+  return cleaned.replace(/\s+/g, "").replace(",", ".");
+}
+
 export default function AdminPage() {
   const [colors, setColors] = useState<Color[]>([]);
   const [name, setName] = useState("");
@@ -33,9 +42,12 @@ export default function AdminPage() {
   const [editingColorId, setEditingColorId] = useState<string | null>(null);
   const [sizesInput, setSizesInput] = useState("P,M,G");
   const [productName, setProductName] = useState("Produto Exemplo");
-  const [parentSku, setParentSku] = useState("PROD-001");
+  const [parentSku, setParentSku] = useState("100001");
+  const [priceInput, setPriceInput] = useState("");
+  const [weightInput, setWeightInput] = useState("");
   const [selectedColorIds, setSelectedColorIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isGeneratingSku, setIsGeneratingSku] = useState(false);
 
   async function loadColors() {
     const res = await fetch("/api/colors", { cache: "no-store" });
@@ -144,167 +156,294 @@ export default function AdminPage() {
     [colors, selectedColorIds]
   );
 
+  async function handleGenerateNextSku() {
+    setError(null);
+    setIsGeneratingSku(true);
+
+    try {
+      const res = await fetch("/api/sku/next", { cache: "no-store" });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || "Erro ao gerar próximo SKU");
+      }
+
+      if (!json.sku || !/^\d+$/.test(String(json.sku))) {
+        throw new Error("API retornou SKU inválido");
+      }
+
+      setParentSku(String(json.sku));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao gerar SKU");
+    } finally {
+      setIsGeneratingSku(false);
+    }
+  }
+
   function handleExport() {
+    setError(null);
+
+    const skuBase = parentSku.trim();
+    if (!/^\d+$/.test(skuBase)) {
+      setError("SKU do pai deve ser numérico (ex: 100001)");
+      return;
+    }
+
+    const normalizedPrice = normalizeDecimal(priceInput);
+    const normalizedWeight = normalizeDecimal(weightInput);
+
     const sizes = sizesInput
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
 
-    const parentImages = Array.from(new Set(selectedColors.map((c) => c.image_url).filter(Boolean) as string[]));
+    const orderedColors = [...selectedColors].sort((a, b) => a.slug.localeCompare(b.slug));
+    const parentImages = Array.from(new Set(orderedColors.map((c) => c.image_url).filter(Boolean) as string[]));
 
     const headers = [
       "Type",
       "SKU",
       "Name",
+      "Regular price",
+      "Weight (kg)",
       "Parent",
       "Attribute 1 name",
       "Attribute 1 value(s)",
+      "Attribute 1 visible",
+      "Attribute 1 global",
       "Attribute 2 name",
       "Attribute 2 value(s)",
+      "Attribute 2 visible",
+      "Attribute 2 global",
+      "In stock?",
+      "Manage stock?",
+      "Stock",
       "Images"
     ];
 
     const rows: string[][] = [
       [
         "variable",
-        parentSku,
+        skuBase,
         productName,
+        normalizedPrice,
+        normalizedWeight,
         "",
-        "pa_cor",
-        selectedColors.map((c) => c.name).join(","),
-        "pa_tamanho",
+        "Cor",
+        orderedColors.map((c) => c.name).join(","),
+        "1",
+        "1",
+        "Tamanho",
         sizes.join(","),
+        "1",
+        "1",
+        "1",
+        "0",
+        "",
         parentImages.join(",")
       ]
     ];
 
-    for (const color of selectedColors) {
-      for (const size of sizes) {
-        rows.push([
-          "variation",
-          `${parentSku}-${color.slug}-${size}`,
-          `${productName} - ${color.name} - ${size}`,
-          parentSku,
-          "pa_cor",
-          color.name,
-          "pa_tamanho",
-          size,
-          color.image_url || ""
-        ]);
-      }
+    const orderedVariations = buildOrderedVariations(orderedColors, sizes);
+
+    orderedVariations.forEach(({ color, size }, index) => {
+      const suffix = String(index + 1).padStart(2, "0");
+
+      rows.push([
+        "variation",
+        `${skuBase}${suffix}`,
+        `${productName} - ${color.name} - ${size}`,
+        normalizedPrice,
+        normalizedWeight,
+        skuBase,
+        "Cor",
+        color.name,
+        "1",
+        "1",
+        "Tamanho",
+        size,
+        "1",
+        "1",
+        "1",
+        "0",
+        "",
+        color.image_url || ""
+      ]);
+    });
+
+    const forceQuotedColumns = new Set([1, 5]); // SKU e Parent
+
+    function quoteCsvString(value: string) {
+      return `"${value.replace(/"/g, '""')}"`;
     }
 
     const csv = [headers, ...rows]
-      .map((line) => line.map((v) => escapeCsv(v)).join(","))
+      .map((line, rowIndex) =>
+        line
+          .map((v, columnIndex) => {
+            if (rowIndex > 0 && forceQuotedColumns.has(columnIndex) && v) {
+              return quoteCsvString(v);
+            }
+            return escapeCsv(v);
+          })
+          .join(",")
+      )
       .join("\n");
 
     downloadCsv("woocommerce-import.csv", csv);
   }
 
   return (
-    <main style={{ fontFamily: "sans-serif", margin: "32px auto", maxWidth: 1000 }}>
-      <h1>Admin - Importador WooCommerce</h1>
+    <main className={styles.shell}>
+      <header className={styles.header}>
+        <h1>Admin · Importador WooCommerce</h1>
+        <p>Gerencie cores e exporte CSV com SKUs pai/filho numéricos.</p>
+      </header>
 
-      <section style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16, marginBottom: 20 }}>
-        <h2>Cores</h2>
+      {error ? <p className={styles.alert}>{error}</p> : null}
 
-        <form onSubmit={editingColorId ? handleUpdateColor : handleCreateColor} style={{ display: "grid", gap: 8 }}>
-          <label>
-            Nome da cor
-            <input value={name} onChange={(e) => setName(e.target.value)} required style={{ width: "100%" }} />
-          </label>
-          <label>
-            Slug (opcional)
-            <input value={slug} onChange={(e) => setSlug(e.target.value)} style={{ width: "100%" }} />
-          </label>
-
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit">{editingColorId ? "Salvar edição" : "Adicionar cor"}</button>
-            {editingColorId ? (
-              <button type="button" onClick={cancelEdit}>
-                Cancelar
-              </button>
-            ) : null}
+      <div className={styles.grid}>
+        <section className={styles.card}>
+          <div className={styles.cardTitleRow}>
+            <h2>Cores</h2>
+            <span className={styles.pill}>{colors.length} cadastradas</span>
           </div>
-        </form>
 
-        <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-          {colors.map((color) => (
-            <div key={color.id} style={{ border: "1px solid #eee", padding: 12, borderRadius: 6 }}>
-              <strong>{color.name}</strong> <small>({color.slug})</small>
-              <div>
-                {color.image_url ? (
-                  <a href={color.image_url} target="_blank" rel="noreferrer">
-                    imagem atual
-                  </a>
-                ) : (
-                  <small>sem imagem</small>
-                )}
-              </div>
+          <form onSubmit={editingColorId ? handleUpdateColor : handleCreateColor} className={styles.formGrid}>
+            <label className={styles.label}>
+              Nome da cor
+              <input className={styles.input} value={name} onChange={(e) => setName(e.target.value)} required />
+            </label>
+            <label className={styles.label}>
+              Slug (opcional)
+              <input className={styles.input} value={slug} onChange={(e) => setSlug(e.target.value)} />
+            </label>
 
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleUpload(color.id, e.target.files?.[0] || null)}
-              />
-
-              <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                <button type="button" onClick={() => startEdit(color)}>
-                  Editar
+            <div className={styles.buttonRow}>
+              <button className={`${styles.btn} ${styles.btnPrimary}`} type="submit">
+                {editingColorId ? "Salvar edição" : "Adicionar cor"}
+              </button>
+              {editingColorId ? (
+                <button className={`${styles.btn} ${styles.btnMuted}`} type="button" onClick={cancelEdit}>
+                  Cancelar
                 </button>
-                <button type="button" onClick={() => handleDeleteColor(color.id)}>
-                  Excluir
-                </button>
-              </div>
+              ) : null}
             </div>
-          ))}
-        </div>
-      </section>
+          </form>
 
-      <section style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16 }}>
-        <h2>Export CSV</h2>
-        <label>
-          Nome do produto
-          <input value={productName} onChange={(e) => setProductName(e.target.value)} style={{ width: "100%" }} />
-        </label>
-        <label>
-          SKU do pai
-          <input value={parentSku} onChange={(e) => setParentSku(e.target.value)} style={{ width: "100%" }} />
-        </label>
-        <label>
-          Tamanhos (separados por vírgula)
-          <input value={sizesInput} onChange={(e) => setSizesInput(e.target.value)} style={{ width: "100%" }} />
-        </label>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Selecionar</th>
+                  <th>Cor</th>
+                  <th>Slug</th>
+                  <th>Imagem</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {colors.map((color) => (
+                  <tr key={color.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedColorIds.includes(color.id)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectedColorIds((prev) =>
+                            checked ? (prev.includes(color.id) ? prev : [...prev, color.id]) : prev.filter((id) => id !== color.id)
+                          );
+                        }}
+                      />
+                    </td>
+                    <td>{color.name}</td>
+                    <td>{color.slug}</td>
+                    <td>
+                      {color.image_url ? (
+                        <a className={styles.thumbLink} href={color.image_url} target="_blank" rel="noreferrer" title="Abrir imagem em nova aba">
+                          <img className={styles.thumbImage} src={color.image_url} alt={`Imagem da cor ${color.name}`} loading="lazy" />
+                        </a>
+                      ) : (
+                        <span className={styles.muted}>sem imagem</span>
+                      )}
+                      <input
+                        className={`${styles.input} ${styles.fileInput}`}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleUpload(color.id, e.target.files?.[0] || null)}
+                      />
+                    </td>
+                    <td>
+                      <div className={styles.buttonRow}>
+                        <button className={`${styles.btn} ${styles.btnMuted}`} type="button" onClick={() => startEdit(color)}>
+                          Editar
+                        </button>
+                        <button className={`${styles.btn} ${styles.btnDanger}`} type="button" onClick={() => handleDeleteColor(color.id)}>
+                          Excluir
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-        <p>Selecione as cores:</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 6 }}>
-          {colors.map((color) => {
-            const checked = selectedColorIds.includes(color.id);
-            return (
-              <label key={color.id}>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedColorIds((prev) => [...prev, color.id]);
-                    } else {
-                      setSelectedColorIds((prev) => prev.filter((id) => id !== color.id));
-                    }
-                  }}
-                />
+        <section className={styles.card}>
+          <div className={styles.cardTitleRow}>
+            <h2>Export CSV</h2>
+            <span className={styles.pill}>{selectedColors.length} cores selecionadas</span>
+          </div>
+
+          <div className={styles.formGrid}>
+            <label className={styles.label}>
+              Nome do produto
+              <input className={styles.input} value={productName} onChange={(e) => setProductName(e.target.value)} />
+            </label>
+
+            <label className={styles.label}>
+              SKU do pai
+              <div className={styles.skuRow}>
+                <input className={styles.input} value={parentSku} onChange={(e) => setParentSku(e.target.value)} />
+                <button className={`${styles.btn} ${styles.btnMuted}`} type="button" onClick={handleGenerateNextSku} disabled={isGeneratingSku}>
+                  {isGeneratingSku ? "Gerando..." : "Gerar próximo"}
+                </button>
+              </div>
+            </label>
+
+            <label className={styles.label}>
+              Tamanhos (vírgula)
+              <input className={styles.input} value={sizesInput} onChange={(e) => setSizesInput(e.target.value)} />
+            </label>
+
+            <label className={styles.label}>
+              Preço (R$)
+              <input className={styles.input} value={priceInput} onChange={(e) => setPriceInput(e.target.value)} placeholder="79,90" />
+            </label>
+
+            <label className={styles.label}>
+              Peso (kg)
+              <input className={styles.input} value={weightInput} onChange={(e) => setWeightInput(e.target.value)} placeholder="0,25" />
+            </label>
+          </div>
+
+          <p className={styles.muted}>Variações seguem ordem estável: cor.slug + tamanho. SKU filho = SKU pai + sufixo de 2 dígitos.</p>
+
+          <button className={`${styles.btn} ${styles.btnPrimary}`} type="button" onClick={handleExport}>
+            Exportar CSV WooCommerce
+          </button>
+
+          <div className={styles.chips}>
+            {selectedColors.map((color) => (
+              <span key={color.id} className={styles.chip}>
                 {color.name}
-              </label>
-            );
-          })}
-        </div>
-
-        <button onClick={handleExport} style={{ marginTop: 16 }}>
-          Exportar CSV WooCommerce
-        </button>
-      </section>
-
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
+              </span>
+            ))}
+          </div>
+        </section>
+      </div>
     </main>
   );
 }
