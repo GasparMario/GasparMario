@@ -28,7 +28,6 @@ function downloadCsv(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-
 function normalizeDecimal(value: string): string {
   const cleaned = value.trim();
   if (!cleaned) return "";
@@ -316,7 +315,11 @@ export default function AdminPage() {
                         onChange={(e) => {
                           const checked = e.target.checked;
                           setSelectedColorIds((prev) =>
-                            checked ? (prev.includes(color.id) ? prev : [...prev, color.id]) : prev.filter((id) => id !== color.id)
+                            checked
+                              ? prev.includes(color.id)
+                                ? prev
+                                : [...prev, color.id]
+                              : prev.filter((id) => id !== color.id)
                           );
                         }}
                       />
@@ -325,8 +328,19 @@ export default function AdminPage() {
                     <td>{color.slug}</td>
                     <td>
                       {color.image_url ? (
-                        <a className={styles.thumbLink} href={color.image_url} target="_blank" rel="noreferrer" title="Abrir imagem em nova aba">
-                          <img className={styles.thumbImage} src={color.image_url} alt={`Imagem da cor ${color.name}`} loading="lazy" />
+                        <a
+                          className={styles.thumbLink}
+                          href={color.image_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Abrir imagem em nova aba"
+                        >
+                          <img
+                            className={styles.thumbImage}
+                            src={color.image_url}
+                            alt={`Imagem da cor ${color.name}`}
+                            loading="lazy"
+                          />
                         </a>
                       ) : (
                         <span className={styles.muted}>sem imagem</span>
@@ -371,7 +385,12 @@ export default function AdminPage() {
               SKU do pai
               <div className={styles.skuRow}>
                 <input className={styles.input} value={parentSku} onChange={(e) => setParentSku(e.target.value)} />
-                <button className={`${styles.btn} ${styles.btnMuted}`} type="button" onClick={handleGenerateNextSku} disabled={isGeneratingSku}>
+                <button
+                  className={`${styles.btn} ${styles.btnMuted}`}
+                  type="button"
+                  onClick={handleGenerateNextSku}
+                  disabled={isGeneratingSku}
+                >
                   {isGeneratingSku ? "Gerando..." : "Gerar próximo"}
                 </button>
               </div>
@@ -384,12 +403,22 @@ export default function AdminPage() {
 
             <label className={styles.label}>
               Preço (R$)
-              <input className={styles.input} value={priceInput} onChange={(e) => setPriceInput(e.target.value)} placeholder="79,90" />
+              <input
+                className={styles.input}
+                value={priceInput}
+                onChange={(e) => setPriceInput(e.target.value)}
+                placeholder="79,90"
+              />
             </label>
 
             <label className={styles.label}>
               Peso (kg)
-              <input className={styles.input} value={weightInput} onChange={(e) => setWeightInput(e.target.value)} placeholder="0,25" />
+              <input
+                className={styles.input}
+                value={weightInput}
+                onChange={(e) => setWeightInput(e.target.value)}
+                placeholder="0,25"
+              />
             </label>
           </div>
 
