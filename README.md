@@ -50,13 +50,14 @@ Acesse: `http://localhost:3000/admin`
 
 ## Regras de export implementadas
 
+- SKU do produto pai = `sku_base` numérico (ex.: `100001`).
+- SKU das variações = `sku_base` + sufixo de 2 dígitos (`01`, `02`, ...), ex.: `10000101`.
+- Ordem estável das variações para gerar sufixo: ordenação por `cor.slug` + `tamanho`.
 - Variações (cor+tamanho): `Images` = `colors.image_url` da cor.
 - Produto pai: `Images` = lista única das `image_url` das cores selecionadas, separadas por vírgula.
 - Cor sem `image_url`: `Images` vazio nas variações dessa cor (sem falhar export).
 
 ## Geração de SKU (`/api/sku/next`)
-
-A rota `GET /api/sku/next` usa RPC `next_sku` no Supabase e foi marcada como **dinâmica** (`force-dynamic`) com `Cache-Control: no-store` para evitar cache de resposta em produção (ex.: Vercel).
 
 Se local funciona e no Vercel não, normalmente é um destes pontos:
 

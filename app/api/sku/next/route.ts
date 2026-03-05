@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -7,17 +7,15 @@ export const revalidate = 0;
 
 type NextSkuRpcResponse = number | string | { next_sku?: number | string } | null;
 
-function formatSku(raw: number | string, prefix: string) {
+function normalizeNumericSku(raw: number | string) {
   const value = String(raw).trim();
   if (!value) return null;
-  if (value.startsWith(prefix)) return value;
-  return `${prefix}${value}`;
+  if (!/^\d+$/.test(value)) return null;
+  return value;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const prefix = req.nextUrl.searchParams.get("prefix") ?? "SKU-";
-
     const supabase = getSupabaseServerClient();
     const { data, error } = await supabase.rpc("next_sku");
 
@@ -37,12 +35,13 @@ export async function GET(req: NextRequest) {
     }
 
     const rpcData = data as NextSkuRpcResponse;
+
     const rawValue =
       rpcData == null
         ? null
         : typeof rpcData === "object"
-          ? (rpcData.next_sku ?? null)
-          : rpcData;
+        ? rpcData.next_sku ?? null
+        : rpcData;
 
     if (rawValue == null) {
       return NextResponse.json(
@@ -56,11 +55,11 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const sku = formatSku(rawValue, prefix);
+    const sku = normalizeNumericSku(rawValue);
 
     if (!sku) {
       return NextResponse.json(
-        { error: "Não foi possível formatar o SKU retornado pela RPC." },
+        { error: "RPC `next_sku` retornou um valor não numérico." },
         {
           status: 500,
           headers: {
