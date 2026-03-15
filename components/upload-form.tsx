@@ -85,10 +85,12 @@ export function UploadForm() {
       setTags("");
       setFile(null);
       setStatusMessage(null);
+
       const fileInput = document.getElementById("pdf-input") as HTMLInputElement | null;
       if (fileInput) {
         fileInput.value = "";
       }
+
       setSuccess("Arte enviada com sucesso! Upload direto concluído.");
     } catch (err) {
       setStatusMessage(null);
