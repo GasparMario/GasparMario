@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "dtf-manager",
-  description: "Sistema web para gerenciamento de PDFs de estampas DTF"
+  title: "GasparMario",
+  description: "Fluxo de catálogo com variações para WooCommerce"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
