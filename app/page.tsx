@@ -1,11 +1,46 @@
-import Link from "next/link";
+import { ArtList } from "@/components/art-list";
+import { Header } from "@/components/header";
+import { SearchForm } from "@/components/search-form";
+import { listArts } from "@/lib/dtf-repository";
+import { DtfArt } from "@/lib/dtf";
 
-export default function HomePage() {
+type HomeProps = {
+  searchParams?: {
+    q?: string;
+  };
+};
+
+export default async function HomePage({ searchParams }: HomeProps) {
+  const query = searchParams?.q?.trim() || "";
+
+  let items: DtfArt[] = [];
+  let errorMessage = "";
+
+  try {
+    items = await listArts(query);
+  } catch (error) {
+    errorMessage =
+      error instanceof Error
+        ? error.message
+        : "Não foi possível carregar as artes. Verifique a configuração do Supabase.";
+  }
+
   return (
-    <main style={{ fontFamily: "sans-serif", maxWidth: 860, margin: "48px auto", lineHeight: 1.5 }}>
-      <h1>GasparMario (Next.js)</h1>
-      <p>Abra o admin para gerenciar cores e gerar CSV para WooCommerce.</p>
-      <Link href="/admin">Ir para /admin</Link>
-    </main>
+    <>
+      <Header />
+      <main className="container main-content">
+        <section className="panel">
+          <h1>Gerenciador de estampas DTF</h1>
+          <p>Pesquise artes cadastradas e baixe os PDFs em um clique.</p>
+          <SearchForm />
+          {errorMessage ? <p className="feedback error">{errorMessage}</p> : null}
+        </section>
+
+        <section className="panel">
+          <h2>Artes cadastradas</h2>
+          <ArtList items={items} />
+        </section>
+      </main>
+    </>
   );
 }
