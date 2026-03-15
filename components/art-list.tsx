@@ -14,11 +14,11 @@ export function ArtList({ items }: ArtListProps) {
       {items.map((art) => (
         <li key={art.id} className="art-card">
           <div>
-            <h3>{art.nome_arte}</h3>
+            <h3>{art.nome}</h3>
             <p>Tags: {art.tags || "sem tags"}</p>
             <p>Cadastrado em: {formatDate(art.created_at)}</p>
           </div>
-          <a href={art.public_url} target="_blank" rel="noreferrer" className="button-secondary">
+          <a href={art.download_url} target="_blank" rel="noreferrer" className="button-secondary">
             Baixar PDF
           </a>
         </li>

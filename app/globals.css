@@ -166,3 +166,7 @@ input[type="file"] {
 .feedback.success {
   color: #047857;
 }
+
+.feedback.info {
+  color: #1d4ed8;
+}

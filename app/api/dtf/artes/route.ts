@@ -1,8 +1,7 @@
-import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { ensurePdfFile, normalizeArtName } from "@/lib/dtf";
+import { CreateDtfArtPayload, normalizeArtName } from "@/lib/dtf";
 import { listArts } from "@/lib/dtf-repository";
-import { getDtfBucketName, getSupabaseClient } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 
 export async function GET(request: Request) {
   try {
@@ -19,54 +18,45 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const formData = await request.formData();
-    const nomeArte = String(formData.get("nomeArte") || "").trim();
-    const tags = String(formData.get("tags") || "").trim();
-    const file = formData.get("pdf");
+    const contentType = request.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      return NextResponse.json(
+        { error: "Formato inválido. Envie apenas JSON com metadados da arte." },
+        { status: 415 }
+      );
+    }
 
-    if (!nomeArte) {
+    const body = (await request.json()) as Partial<CreateDtfArtPayload>;
+
+    const nome = String(body.nome || "").trim();
+    const nomeNormalizado = String(body.nome_normalizado || "").trim();
+    const tags = body.tags ? String(body.tags).trim() : null;
+    const arquivoPath = String(body.arquivo_path || "").trim();
+    const arquivoNomeOriginal = String(body.arquivo_nome_original || "").trim();
+    const tamanhoBytes = Number(body.tamanho_bytes || 0);
+
+    if (!nome) {
       return NextResponse.json({ error: "Informe o nome da arte." }, { status: 400 });
     }
 
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: "Selecione um arquivo PDF." }, { status: 400 });
+    if (!arquivoPath || !arquivoNomeOriginal || !Number.isFinite(tamanhoBytes) || tamanhoBytes <= 0) {
+      return NextResponse.json({ error: "Metadados do arquivo inválidos." }, { status: 400 });
     }
-
-    ensurePdfFile(file);
 
     const supabase = getSupabaseClient();
-    const bucket = getDtfBucketName();
-    const extension = file.name.split(".").pop()?.toLowerCase() || "pdf";
-    const filename = `${Date.now()}-${randomUUID()}.${extension}`;
-    const storagePath = `${normalizeArtName(nomeArte).replace(/\s+/g, "-")}/${filename}`;
-
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
-
-    const uploadResult = await supabase.storage.from(bucket).upload(storagePath, fileBuffer, {
-      cacheControl: "3600",
-      contentType: "application/pdf",
-      upsert: false
-    });
-
-    if (uploadResult.error) {
-      throw uploadResult.error;
-    }
-
-    const publicUrlResult = supabase.storage.from(bucket).getPublicUrl(storagePath);
-    const publicUrl = publicUrlResult.data.publicUrl;
-
     const payload = {
-      nome_arte: nomeArte,
-      nome_normalizado: normalizeArtName(nomeArte),
-      tags: tags || null,
-      storage_path: storagePath,
-      public_url: publicUrl
+      nome,
+      nome_normalizado: nomeNormalizado || normalizeArtName(nome),
+      tags,
+      arquivo_path: arquivoPath,
+      arquivo_nome_original: arquivoNomeOriginal,
+      tamanho_bytes: tamanhoBytes
     };
 
     const { data, error } = await supabase
       .from("artes_dtf")
       .insert(payload)
-      .select("id,nome_arte,nome_normalizado,tags,storage_path,public_url,created_at")
+      .select("id,nome,nome_normalizado,tags,arquivo_path,arquivo_nome_original,tamanho_bytes,created_at")
       .single();
 
     if (error) {
@@ -75,7 +65,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ item: data }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro ao salvar arte";
+    const message = error instanceof Error ? error.message : "Erro ao salvar metadados da arte";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

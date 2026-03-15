@@ -13,5 +13,5 @@ export function getSupabaseClient() {
 }
 
 export function getDtfBucketName() {
-  return process.env.SUPABASE_DTF_BUCKET || "dtf-pdfs";
+  return process.env.SUPABASE_DTF_BUCKET || process.env.NEXT_PUBLIC_SUPABASE_DTF_BUCKET || "dtf-pdfs";
 }
