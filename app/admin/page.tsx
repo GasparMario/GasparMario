@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./admin.module.css";
 import { buildOrderedVariations } from "@/lib/sku";
-}
 
 type Color = {
   id: string;
