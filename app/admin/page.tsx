@@ -1,7 +1,7 @@
 "use client";
-
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import styles from "./admin.module.css";
 import { buildOrderedVariations } from "@/lib/sku";
 
@@ -40,6 +40,16 @@ function quoteCsvString(value: string) {
 }
 
 export default function AdminPage() {
+    const router = useRouter();
+
+  useEffect(() => {
+    const auth = localStorage.getItem("ellos-auth");
+
+    if (auth !== "true") {
+      router.push("/login");
+    }
+  }, [router]);
+
   const [colors, setColors] = useState<Color[]>([]);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
