@@ -476,7 +476,7 @@ export default function AdminPage() {
           "Tipo do item": "Mercadoria para Revenda",
           "Código Pai": skuBase,
           "Clonar dados do pai": "NÃO",
-          "URL Imagens Externas": color.image_url || ""
+          "URL Imagens Externas": "",
         })
       );
     });
