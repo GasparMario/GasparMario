@@ -474,10 +474,7 @@ export default function AdminPage() {
         "Tipo Produção": "P",
         "Tipo do item": "Mercadoria para Revenda",
         "Clonar dados do pai": "NÃO",
-        "URL Imagens Externas": orderedColors
-          .map((c) => c.image_url)
-          .filter(Boolean)
-          .join(", ")
+        "URL Imagens Externas": orderedColors.find((c) => c.image_url)?.image_url || ""
       })
     );
 
