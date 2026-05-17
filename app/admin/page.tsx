@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./admin.module.css";
 import { buildOrderedVariations } from "@/lib/sku";
@@ -514,10 +515,23 @@ export default function AdminPage() {
 
   return (
     <main className={styles.shell}>
-      <header className={styles.header}>
-        <h1>Admin · Importador WooCommerce</h1>
-        <p>Gerencie cores e exporte CSV com SKUs pai/filho numéricos.</p>
-      </header>
+<header className={styles.header}>
+  <Image
+    src="/Ellos-Escrito-Logo-Preto.png"
+    alt="Ellos"
+    width={260}
+    height={80}
+    className={styles.logo}
+  />
+
+  <p className={styles.subtitle}>
+    Facilitador de Cadastro de Produtos
+  </p>
+
+  <p>
+    Cadastre cores, variações e gere o arquivo para importação no Bling.
+  </p>
+</header>
 
       {error ? <p className={styles.alert}>{error}</p> : null}
 
@@ -662,7 +676,7 @@ export default function AdminPage() {
 
         <section className={styles.card}>
           <div className={styles.cardTitleRow}>
-            <h2>Export CSV</h2>
+            <h2>Exportar produto</h2>
             <span className={styles.pill}>
               {selectedColors.length} cores selecionadas
             </span>
@@ -735,20 +749,13 @@ export default function AdminPage() {
           </p>
 
           <div className={styles.buttonRow}>
-            <button
-              className={`${styles.btn} ${styles.btnPrimary}`}
-              type="button"
-              onClick={handleExport}
-            >
-              Exportar CSV WooCommerce
-            </button>
 
             <button
               className={`${styles.btn} ${styles.btnPrimary}`}
               type="button"
               onClick={handleExportBling}
             >
-              Exportar CSV Bling
+              Exportar para Bling
             </button>
           </div>
 
