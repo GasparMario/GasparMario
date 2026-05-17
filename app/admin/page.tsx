@@ -19,7 +19,7 @@ function escapeCsv(value: string): string {
 }
 
 function downloadCsv(filename: string, content: string) {
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -44,43 +44,33 @@ export default function AdminPage() {
   const [slug, setSlug] = useState("");
   const [editingColorId, setEditingColorId] = useState<string | null>(null);
 
-  // Mantém pré-preenchido (você pediu)
   const [sizesInput, setSizesInput] = useState("P,M,G");
-
-  // Começa vazio (evita export com "exemplo" sem querer)
   const [productName, setProductName] = useState("");
   const [parentSku, setParentSku] = useState("");
-
   const [priceInput, setPriceInput] = useState("");
   const [weightInput, setWeightInput] = useState("");
-
   const [selectedColorIds, setSelectedColorIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isGeneratingSku, setIsGeneratingSku] = useState(false);
 
-  // Evita gerar SKU em loop
   const didAutoSkuRef = useRef(false);
 
   async function loadColors() {
     const res = await fetch("/api/colors", { cache: "no-store" });
     const json = await res.json();
+
     if (!res.ok) {
       throw new Error(json.error || "Erro ao listar cores");
     }
+
     setColors(json.colors);
   }
 
-  useEffect(() => {
-    loadColors().catch((err) => setError(err.message));
-  }, []);
-
-  // Auto-gerar SKU ao abrir a página (1 vez), só se estiver vazio
   useEffect(() => {
     if (didAutoSkuRef.current) return;
     if (parentSku.trim()) return;
 
     didAutoSkuRef.current = true;
-    // não precisa await
     handleGenerateNextSku();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parentSku]);
@@ -94,6 +84,7 @@ export default function AdminPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, slug })
     });
+
     const json = await res.json();
 
     if (!res.ok) {
@@ -124,6 +115,7 @@ export default function AdminPage() {
   async function handleUpdateColor(e: React.FormEvent) {
     e.preventDefault();
     if (!editingColorId) return;
+
     setError(null);
 
     const res = await fetch(`/api/colors/${editingColorId}`, {
@@ -131,6 +123,7 @@ export default function AdminPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, slug })
     });
+
     const json = await res.json();
 
     if (!res.ok) {
@@ -144,6 +137,7 @@ export default function AdminPage() {
 
   async function handleDeleteColor(colorId: string) {
     setError(null);
+
     const res = await fetch(`/api/colors/${colorId}`, { method: "DELETE" });
     const json = await res.json();
 
@@ -158,12 +152,17 @@ export default function AdminPage() {
 
   async function handleUpload(colorId: string, file: File | null) {
     if (!file) return;
+
     setError(null);
 
     const form = new FormData();
     form.append("image", file);
 
-    const res = await fetch(`/api/colors/${colorId}/image`, { method: "POST", body: form });
+    const res = await fetch(`/api/colors/${colorId}/image`, {
+      method: "POST",
+      body: form
+    });
+
     const json = await res.json();
 
     if (!res.ok) {
@@ -203,41 +202,69 @@ export default function AdminPage() {
     }
   }
 
-  function handleExport() {
-    setError(null);
-
+  function getValidatedExportData() {
     const trimmedProductName = productName.trim();
+
     if (!trimmedProductName) {
       setError("Informe o nome do produto.");
-      return;
+      return null;
     }
 
     if (!sizesInput.trim()) {
       setError("Informe os tamanhos (ex: P,M,G).");
-      return;
+      return null;
     }
 
     const skuBase = parentSku.trim();
+
     if (!skuBase) {
       setError("Informe o SKU do pai ou aguarde o SKU automático.");
-      return;
+      return null;
     }
 
     if (!/^\d+$/.test(skuBase)) {
       setError("SKU do pai deve ser numérico (ex: 100001)");
-      return;
+      return null;
     }
-
-    const normalizedPrice = normalizeDecimal(priceInput);
-    const normalizedWeight = normalizeDecimal(weightInput);
 
     const sizes = sizesInput
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
 
+    if (sizes.length === 0) {
+      setError("Informe pelo menos um tamanho válido.");
+      return null;
+    }
+
     const orderedColors = [...selectedColors].sort((a, b) => a.slug.localeCompare(b.slug));
-    const parentImages = Array.from(new Set(orderedColors.map((c) => c.image_url).filter(Boolean) as string[]));
+
+    if (orderedColors.length === 0) {
+      setError("Selecione pelo menos uma cor.");
+      return null;
+    }
+
+    return {
+      trimmedProductName,
+      skuBase,
+      normalizedPrice: normalizeDecimal(priceInput),
+      normalizedWeight: normalizeDecimal(weightInput),
+      sizes,
+      orderedColors
+    };
+  }
+
+  function handleExport() {
+    setError(null);
+
+    const data = getValidatedExportData();
+    if (!data) return;
+
+    const { trimmedProductName, skuBase, normalizedPrice, normalizedWeight, sizes, orderedColors } = data;
+
+    const parentImages = Array.from(
+      new Set(orderedColors.map((c) => c.image_url).filter(Boolean) as string[])
+    );
 
     const headers = [
       "Type",
@@ -310,8 +337,7 @@ export default function AdminPage() {
       ]);
     });
 
-    // Forçar SKU e Parent como string no CSV (evita interpretação numérica indevida)
-    const forceQuotedColumns = new Set([1, 5]); // SKU e Parent
+    const forceQuotedColumns = new Set([1, 5]);
 
     const csv = [headers, ...rows]
       .map((line, rowIndex) =>
@@ -320,13 +346,146 @@ export default function AdminPage() {
             if (rowIndex > 0 && forceQuotedColumns.has(columnIndex) && v) {
               return quoteCsvString(v);
             }
+
             return escapeCsv(v);
           })
           .join(",")
       )
-      .join("\n");
+      .join("\r\n");
 
     downloadCsv("woocommerce-import.csv", csv);
+  }
+
+  function handleExportBling() {
+    setError(null);
+
+    const data = getValidatedExportData();
+    if (!data) return;
+
+    const { trimmedProductName, skuBase, normalizedPrice, normalizedWeight, sizes, orderedColors } = data;
+
+    const headers = [
+      "ID",
+      "Código",
+      "Descrição",
+      "Unidade",
+      "NCM",
+      "Origem",
+      "Preço",
+      "Valor IPI fixo",
+      "Observações",
+      "Situação",
+      "Estoque",
+      "Preço de custo",
+      "Cód no fornecedor",
+      "Fornecedor",
+      "Localização",
+      "Estoque maximo",
+      "Estoque minimo",
+      "Peso líquido (Kg)",
+      "Peso bruto (Kg)",
+      "GTIN/EAN",
+      "GTIN/EAN da embalagem",
+      "Largura do Produto",
+      "Altura do Produto",
+      "Profundidade do produto",
+      "Data Validade",
+      "Descrição do Produto no Fornecedor",
+      "Descrição Complementar",
+      "Itens p/ caixa",
+      "Produto Variação",
+      "Tipo Produção",
+      "Classe de enquadramento do IPI",
+      "Código da lista de serviços",
+      "Tipo do item",
+      "Grupo de Tags/Tags",
+      "Tributos",
+      "Código Pai",
+      "Código Integração",
+      "Grupo de produtos",
+      "Marca",
+      "CEST",
+      "Volumes",
+      "Descrição Curta",
+      "Cross-Docking",
+      "URL Imagens Externas",
+      "Link Externo",
+      "Meses Garantia no Fornecedor",
+      "Clonar dados do pai",
+      "Condição do produto",
+      "Frete Grátis",
+      "Número FCI",
+      "Vídeo",
+      "Departamento",
+      "Unidade de medida",
+      "Preço de compra",
+      "Valor base ICMS ST para retenção",
+      "Valor ICMS ST para retenção",
+      "Valor ICMS próprio do substituto",
+      "Categoria do produto",
+      "Informações Adicionais"
+    ];
+
+    function makeBlingRow(values: Partial<Record<(typeof headers)[number], string>>) {
+      return headers.map((header) => values[header] || "");
+    }
+
+    const rows: string[][] = [];
+
+    rows.push(
+      makeBlingRow({
+        Código: skuBase,
+        Descrição: trimmedProductName,
+        Unidade: "UN",
+        Origem: "0",
+        Preço: normalizedPrice,
+        Situação: "Ativo",
+        Estoque: "0",
+        "Peso líquido (Kg)": normalizedWeight,
+        "Peso bruto (Kg)": normalizedWeight,
+        "Produto Variação": "",
+        "Tipo Produção": "P",
+        "Tipo do item": "Mercadoria para Revenda",
+        "Clonar dados do pai": "NÃO",
+        "URL Imagens Externas": orderedColors
+          .map((c) => c.image_url)
+          .filter(Boolean)
+          .join(", ")
+      })
+    );
+
+    const orderedVariations = buildOrderedVariations(orderedColors, sizes);
+
+    orderedVariations.forEach(({ color, size }, index) => {
+      const suffix = String(index + 1).padStart(2, "0");
+      const childSku = `${skuBase}${suffix}`;
+
+      rows.push(
+        makeBlingRow({
+          Código: childSku,
+          Descrição: `Cor:${color.name};Tamanho:${size}`,
+          Unidade: "UN",
+          Origem: "0",
+          Preço: normalizedPrice,
+          Situação: "Ativo",
+          Estoque: "0",
+          "Peso líquido (Kg)": normalizedWeight,
+          "Peso bruto (Kg)": normalizedWeight,
+          "Produto Variação": "Produto",
+          "Tipo Produção": "P",
+          "Tipo do item": "Mercadoria para Revenda",
+          "Código Pai": skuBase,
+          "Clonar dados do pai": "NÃO",
+          "URL Imagens Externas": color.image_url || ""
+        })
+      );
+    });
+
+    const csv = [headers, ...rows]
+      .map((line) => line.map((v) => escapeCsv(v)).join(","))
+      .join("\r\n");
+
+    downloadCsv("bling-import.csv", csv);
   }
 
   return (
@@ -350,6 +509,7 @@ export default function AdminPage() {
               Nome da cor
               <input className={styles.input} value={name} onChange={(e) => setName(e.target.value)} required />
             </label>
+
             <label className={styles.label}>
               Slug (opcional)
               <input className={styles.input} value={slug} onChange={(e) => setSlug(e.target.value)} />
@@ -359,6 +519,7 @@ export default function AdminPage() {
               <button className={`${styles.btn} ${styles.btnPrimary}`} type="submit">
                 {editingColorId ? "Salvar edição" : "Adicionar cor"}
               </button>
+
               {editingColorId ? (
                 <button className={`${styles.btn} ${styles.btnMuted}`} type="button" onClick={cancelEdit}>
                   Cancelar
@@ -378,6 +539,7 @@ export default function AdminPage() {
                   <th>Ações</th>
                 </tr>
               </thead>
+
               <tbody>
                 {colors.map((color) => (
                   <tr key={color.id}>
@@ -387,6 +549,7 @@ export default function AdminPage() {
                         checked={selectedColorIds.includes(color.id)}
                         onChange={(e) => {
                           const checked = e.target.checked;
+
                           setSelectedColorIds((prev) =>
                             checked
                               ? prev.includes(color.id)
@@ -397,8 +560,10 @@ export default function AdminPage() {
                         }}
                       />
                     </td>
+
                     <td>{color.name}</td>
                     <td>{color.slug}</td>
+
                     <td>
                       {color.image_url ? (
                         <a
@@ -418,6 +583,7 @@ export default function AdminPage() {
                       ) : (
                         <span className={styles.muted}>sem imagem</span>
                       )}
+
                       <input
                         className={`${styles.input} ${styles.fileInput}`}
                         type="file"
@@ -425,11 +591,13 @@ export default function AdminPage() {
                         onChange={(e) => handleUpload(color.id, e.target.files?.[0] || null)}
                       />
                     </td>
+
                     <td>
                       <div className={styles.buttonRow}>
                         <button className={`${styles.btn} ${styles.btnMuted}`} type="button" onClick={() => startEdit(color)}>
                           Editar
                         </button>
+
                         <button className={`${styles.btn} ${styles.btnDanger}`} type="button" onClick={() => handleDeleteColor(color.id)}>
                           Excluir
                         </button>
@@ -468,6 +636,7 @@ export default function AdminPage() {
                   onChange={(e) => setParentSku(e.target.value)}
                   placeholder="SKU automático (ou clique em Gerar próximo)"
                 />
+
                 <button
                   className={`${styles.btn} ${styles.btnMuted}`}
                   type="button"
@@ -509,9 +678,15 @@ export default function AdminPage() {
             Variações seguem ordem estável: cor.slug + tamanho. SKU filho = SKU pai + sufixo de 2 dígitos.
           </p>
 
-          <button className={`${styles.btn} ${styles.btnPrimary}`} type="button" onClick={handleExport}>
-            Exportar CSV WooCommerce
-          </button>
+          <div className={styles.buttonRow}>
+            <button className={`${styles.btn} ${styles.btnPrimary}`} type="button" onClick={handleExport}>
+              Exportar CSV WooCommerce
+            </button>
+
+            <button className={`${styles.btn} ${styles.btnPrimary}`} type="button" onClick={handleExportBling}>
+              Exportar CSV Bling
+            </button>
+          </div>
 
           <div className={styles.chips}>
             {selectedColors.map((color) => (
