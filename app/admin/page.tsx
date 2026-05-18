@@ -40,7 +40,12 @@ function quoteCsvString(value: string) {
 }
 
 export default function AdminPage() {
-    const router = useRouter();
+  const router = useRouter();
+
+  function handleLogout() {
+    localStorage.removeItem("ellos-auth");
+    router.push("/login");
+  }
 
   useEffect(() => {
     const auth = localStorage.getItem("ellos-auth");
@@ -541,6 +546,13 @@ export default function AdminPage() {
   <p>
     Cadastre cores, variações e gere o arquivo para importação no Bling.
   </p>
+
+  <button
+    className={`${styles.btn} ${styles.btnMuted}`}
+    onClick={handleLogout}
+  >
+    Sair
+  </button>
 </header>
 
       {error ? <p className={styles.alert}>{error}</p> : null}
@@ -579,6 +591,12 @@ export default function AdminPage() {
               <button className={`${styles.btn} ${styles.btnPrimary}`} type="submit">
                 {editingColorId ? "Salvar edição" : "Adicionar cor"}
               </button>
+              <button
+  className={`${styles.btn} ${styles.btnMuted}`}
+  onClick={handleLogout}
+>
+  Sair
+</button>
 
               {editingColorId ? (
                 <button
