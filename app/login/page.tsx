@@ -54,7 +54,7 @@ export default function LoginPage() {
           Entrar
         </button>
 
-        <p className={styles.footer}>Powered by AlfredOps</p>
+        <p className={styles.footer}>Powered by MG</p>
       </form>
     </main>
   );
