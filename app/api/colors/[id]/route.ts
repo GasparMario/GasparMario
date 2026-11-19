@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
+import { getCurrentUserId } from "@/lib/auth-users";
 
 function toSlug(value: string): string {
   return value
@@ -13,6 +14,10 @@ function toSlug(value: string): string {
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const ownerId = await getCurrentUserId();
+    if (!ownerId) {
+      return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+    }
     const body = (await request.json()) as { name?: string; slug?: string };
     const name = (body.name || "").trim();
     const slugInput = (body.slug || "").trim();
@@ -30,11 +35,20 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       .from("colors")
       .update(payload)
       .eq("id", params.id)
+      .eq("owner_id", ownerId)
       .select("id,name,slug,image_url")
-      .single();
+      .maybeSingle();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      const duplicate = /duplicate|unique/i.test(error.message);
+      return NextResponse.json(
+        { error: duplicate ? "Você já tem uma cor com esse slug." : error.message },
+        { status: 400 }
+      );
+    }
+
+    if (!data) {
+      return NextResponse.json({ error: "Cor não encontrada." }, { status: 404 });
     }
 
     return NextResponse.json({ color: data });
@@ -45,11 +59,25 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
 export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const ownerId = await getCurrentUserId();
+    if (!ownerId) {
+      return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+    }
+
     const supabase = getSupabaseServerClient();
-    const { error } = await supabase.from("colors").delete().eq("id", params.id);
+    const { data, error } = await supabase
+      .from("colors")
+      .delete()
+      .eq("id", params.id)
+      .eq("owner_id", ownerId)
+      .select("id");
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    if (!data || data.length === 0) {
+      return NextResponse.json({ error: "Cor não encontrada." }, { status: 404 });
     }
 
     return NextResponse.json({ ok: true });

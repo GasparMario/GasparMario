@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStorageBucket, getSupabaseServerClient } from "@/lib/supabase-server";
+import { getCurrentUserId } from "@/lib/auth-users";
 
 function safeExt(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase() || "jpg";
@@ -12,6 +13,10 @@ function randomSuffix(): string {
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const ownerId = await getCurrentUserId();
+    if (!ownerId) {
+      return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+    }
     const formData = await request.formData();
     const image = formData.get("image");
 
@@ -25,6 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .from("colors")
       .select("id,slug")
       .eq("id", params.id)
+      .eq("owner_id", ownerId)
       .single();
 
     if (colorError || !color?.slug) {
@@ -55,6 +61,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .from("colors")
       .update({ image_url: imageUrl })
       .eq("id", params.id)
+      .eq("owner_id", ownerId)
       .select("id,name,slug,image_url")
       .single();
 
