@@ -35,6 +35,8 @@ function normalizeDecimal(value: string): string {
   return cleaned.replace(/\s+/g, "").replace(",", ".");
 }
 
+const SIZE_PRESETS = ["P,M,G", "PP,P,M,G,GG", "P,M,G,GG,XG", "U"];
+
 function quoteCsvString(value: string) {
   return `"${value.replace(/"/g, '""')}"`;
 }
@@ -67,6 +69,10 @@ export default function AdminPage() {
   const [selectedColorIds, setSelectedColorIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isGeneratingSku, setIsGeneratingSku] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [colorSearch, setColorSearch] = useState("");
+  const [uploadingColorId, setUploadingColorId] = useState<string | null>(null);
+  const [isLoadingColors, setIsLoadingColors] = useState(true);
 
   const didAutoSkuRef = useRef(false);
 
@@ -82,8 +88,16 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    loadColors().catch((err) => setError(err.message));
+    loadColors()
+      .catch((err) => setError(err.message))
+      .finally(() => setIsLoadingColors(false));
   }, []);
+
+  useEffect(() => {
+    if (!success) return;
+    const timer = setTimeout(() => setSuccess(null), 7000);
+    return () => clearTimeout(timer);
+  }, [success]);
 
   useEffect(() => {
     if (didAutoSkuRef.current) return;
@@ -158,6 +172,12 @@ export default function AdminPage() {
   }
 
   async function handleDeleteColor(colorId: string) {
+    const color = colors.find((c) => c.id === colorId);
+    const confirmed = window.confirm(
+      `Excluir a cor "${color?.name ?? ""}"? Essa ação não pode ser desfeita.`
+    );
+    if (!confirmed) return;
+
     setError(null);
 
     const res = await fetch(`/api/colors/${colorId}`, {
@@ -183,25 +203,79 @@ export default function AdminPage() {
     const form = new FormData();
     form.append("image", file);
 
-    const res = await fetch(`/api/colors/${colorId}/image`, {
-      method: "POST",
-      body: form
-    });
+    setUploadingColorId(colorId);
 
-    const json = await res.json();
+    try {
+      const res = await fetch(`/api/colors/${colorId}/image`, {
+        method: "POST",
+        body: form
+      });
 
-    if (!res.ok) {
-      setError(json.error || "Erro ao subir imagem");
-      return;
+      const json = await res.json();
+
+      if (!res.ok) {
+        setError(json.error || "Erro ao subir imagem");
+        return;
+      }
+
+      await loadColors();
+    } finally {
+      setUploadingColorId(null);
     }
-
-    await loadColors();
   }
 
   const selectedColors = useMemo(
     () => colors.filter((c) => selectedColorIds.includes(c.id)),
     [colors, selectedColorIds]
   );
+
+  const filteredColors = useMemo(() => {
+    const normalize = (value: string) =>
+      value
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+    const term = normalize(colorSearch.trim());
+    if (!term) return colors;
+    return colors.filter((c) => normalize(`${c.name} ${c.slug}`).includes(term));
+  }, [colors, colorSearch]);
+
+  const previewSizes = useMemo(
+    () =>
+      sizesInput
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    [sizesInput]
+  );
+
+  const previewVariations = useMemo(() => {
+    const ordered = [...selectedColors].sort((a, b) => a.slug.localeCompare(b.slug));
+    const base = parentSku.trim();
+    return buildOrderedVariations(ordered, previewSizes).map(({ color, size }, index) => ({
+      color,
+      size,
+      sku: base ? `${base}${String(index + 1).padStart(2, "0")}` : "—"
+    }));
+  }, [selectedColors, previewSizes, parentSku]);
+
+  function toggleColor(colorId: string) {
+    setSelectedColorIds((prev) =>
+      prev.includes(colorId) ? prev.filter((id) => id !== colorId) : [...prev, colorId]
+    );
+  }
+
+  function selectAllVisible() {
+    setSelectedColorIds((prev) => {
+      const next = new Set(prev);
+      filteredColors.forEach((c) => next.add(c.id));
+      return Array.from(next);
+    });
+  }
+
+  function clearSelection() {
+    setSelectedColorIds([]);
+  }
 
   async function handleGenerateNextSku() {
     setError(null);
@@ -394,6 +468,7 @@ export default function AdminPage() {
 
   function handleExportBling() {
     setError(null);
+    setSuccess(null);
 
     const data = getValidatedExportData();
     if (!data) return;
@@ -526,275 +601,400 @@ export default function AdminPage() {
       .join("\n");
 
     downloadCsv("bling-import.csv", csv);
+    setSuccess(
+      `Pronto! O arquivo bling-import.csv foi baixado com ${orderedVariations.length} variações. Agora é só importar no Bling.`
+    );
   }
 
+  const variationCount = previewVariations.length;
+  const previewLimit = 8;
+
   return (
-    <main className={styles.shell}>
-<header className={styles.header}>
-  <Image
-    src="/Ellos-Escrito-Logo-Preto.png"
-    alt="Ellos"
-    width={260}
-    height={80}
-    className={styles.logo}
-  />
-
-  <p className={styles.subtitle}>
-    Facilitador de Cadastro de Produtos
-  </p>
-
-  <p>
-    Cadastre cores, variações e gere o arquivo para importação no Bling.
-  </p>
-
-  <button
-    className={`${styles.btn} ${styles.btnMuted}`}
-    onClick={handleLogout}
-  >
-    Sair
-  </button>
-</header>
-
-      {error ? <p className={styles.alert}>{error}</p> : null}
-
-      <div className={styles.grid}>
-        <section className={styles.card}>
-          <div className={styles.cardTitleRow}>
-            <h2>Cores</h2>
-            <span className={styles.pill}>{colors.length} cadastradas</span>
+    <main className={styles.page}>
+      <header className={styles.topbar}>
+        <div className={styles.topbarInner}>
+          <div className={styles.brand}>
+            <Image
+              src="/Ellos-Escrito-Logo-Preto.png"
+              alt="Ellos"
+              width={260}
+              height={80}
+              className={styles.logo}
+              priority
+            />
+            <span className={styles.brandDivider} aria-hidden="true" />
+            <span className={styles.brandTitle}>Cadastro de Produtos</span>
           </div>
 
-          <form
-            onSubmit={editingColorId ? handleUpdateColor : handleCreateColor}
-            className={styles.formGrid}
+          <button
+            className={`${styles.btn} ${styles.btnGhost}`}
+            type="button"
+            onClick={handleLogout}
           >
-            <label className={styles.label}>
-              Nome da cor
-              <input
-                className={styles.input}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </label>
+            Sair
+          </button>
+        </div>
+      </header>
 
-            <label className={styles.label}>
-              Slug (opcional)
-              <input
-                className={styles.input}
-                value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-              />
-            </label>
+      <div className={styles.shell}>
+        <section className={styles.intro}>
+          <h1>Olá! Vamos cadastrar um produto?</h1>
+          <p>
+            Escolha as cores, preencha os dados e baixe o arquivo pronto para importar no Bling.
+          </p>
+        </section>
 
-            <div className={styles.buttonRow}>
-              <button className={`${styles.btn} ${styles.btnPrimary}`} type="submit">
-                {editingColorId ? "Salvar edição" : "Adicionar cor"}
+        <div className={styles.grid}>
+          {/* PASSO 1 — CORES */}
+          <section className={styles.card}>
+            <div className={styles.stepHeader}>
+              <span className={styles.stepNumber}>1</span>
+              <div>
+                <h2>Escolha as cores</h2>
+                <p className={styles.stepHint}>Clique na cor para selecionar ou tirar.</p>
+              </div>
+              <span className={styles.pill}>
+                {selectedColors.length} de {colors.length} selecionadas
+              </span>
+            </div>
+
+            <div className={styles.toolbar}>
+              <input
+                className={`${styles.input} ${styles.searchInput}`}
+                value={colorSearch}
+                onChange={(e) => setColorSearch(e.target.value)}
+                placeholder="Buscar cor…"
+                aria-label="Buscar cor"
+              />
+              <button
+                className={`${styles.btn} ${styles.btnMuted} ${styles.btnSmall}`}
+                type="button"
+                onClick={selectAllVisible}
+                disabled={filteredColors.length === 0}
+              >
+                Selecionar todas
               </button>
               <button
-  className={`${styles.btn} ${styles.btnMuted}`}
-  onClick={handleLogout}
->
-  Sair
-</button>
-
-              {editingColorId ? (
-                <button
-                  className={`${styles.btn} ${styles.btnMuted}`}
-                  type="button"
-                  onClick={cancelEdit}
-                >
-                  Cancelar
-                </button>
-              ) : null}
+                className={`${styles.btn} ${styles.btnMuted} ${styles.btnSmall}`}
+                type="button"
+                onClick={clearSelection}
+                disabled={selectedColorIds.length === 0}
+              >
+                Limpar
+              </button>
             </div>
-          </form>
 
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Selecionar</th>
-                  <th>Cor</th>
-                  <th>Slug</th>
-                  <th>Imagem</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
+            {isLoadingColors ? (
+              <div className={styles.emptyState}>Carregando cores…</div>
+            ) : colors.length === 0 ? (
+              <div className={styles.emptyState}>
+                Nenhuma cor cadastrada ainda. Adicione a primeira logo abaixo.
+              </div>
+            ) : filteredColors.length === 0 ? (
+              <div className={styles.emptyState}>
+                Nenhuma cor encontrada para “{colorSearch}”.
+              </div>
+            ) : (
+              <div className={styles.colorGrid}>
+                {filteredColors.map((color) => {
+                  const isSelected = selectedColorIds.includes(color.id);
+                  const isUploading = uploadingColorId === color.id;
 
-              <tbody>
-                {colors.map((color) => (
-                  <tr key={color.id}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedColorIds.includes(color.id)}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
+                  return (
+                    <article
+                      key={color.id}
+                      className={`${styles.colorTile} ${isSelected ? styles.colorTileSelected : ""} ${
+                        editingColorId === color.id ? styles.colorTileEditing : ""
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        className={styles.colorSelect}
+                        onClick={() => toggleColor(color.id)}
+                        aria-pressed={isSelected}
+                        title={isSelected ? "Clique para tirar" : "Clique para selecionar"}
+                      >
+                        <span className={styles.colorThumb}>
+                          {color.image_url ? (
+                            <img src={color.image_url} alt={`Foto da cor ${color.name}`} loading="lazy" />
+                          ) : (
+                            <span className={styles.noPhoto}>sem foto</span>
+                          )}
+                          {isUploading ? <span className={styles.uploading}>Enviando…</span> : null}
+                        </span>
+                        <span className={styles.check} aria-hidden="true">
+                          ✓
+                        </span>
+                        <span className={styles.colorName}>{color.name}</span>
+                        <span className={styles.colorSlug}>{color.slug}</span>
+                      </button>
 
-                          setSelectedColorIds((prev) =>
-                            checked
-                              ? prev.includes(color.id)
-                                ? prev
-                                : [...prev, color.id]
-                              : prev.filter((id) => id !== color.id)
-                          );
-                        }}
-                      />
-                    </td>
-
-                    <td>{color.name}</td>
-                    <td>{color.slug}</td>
-
-                    <td>
-                      {color.image_url ? (
-                        <a
-                          className={styles.thumbLink}
-                          href={color.image_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          title="Abrir imagem em nova aba"
-                        >
-                          <img
-                            className={styles.thumbImage}
-                            src={color.image_url}
-                            alt={`Imagem da cor ${color.name}`}
-                            loading="lazy"
+                      <div className={styles.tileActions}>
+                        <label className={styles.tileAction} title="Enviar ou trocar a foto">
+                          {color.image_url ? "Foto" : "+ Foto"}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className={styles.hiddenFile}
+                            disabled={isUploading}
+                            onChange={(e) => {
+                              handleUpload(color.id, e.target.files?.[0] || null);
+                              e.target.value = "";
+                            }}
                           />
-                        </a>
-                      ) : (
-                        <span className={styles.muted}>sem imagem</span>
-                      )}
-
-                      <input
-                        className={`${styles.input} ${styles.fileInput}`}
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) =>
-                          handleUpload(color.id, e.target.files?.[0] || null)
-                        }
-                      />
-                    </td>
-
-                    <td>
-                      <div className={styles.buttonRow}>
+                        </label>
                         <button
-                          className={`${styles.btn} ${styles.btnMuted}`}
                           type="button"
+                          className={styles.tileAction}
                           onClick={() => startEdit(color)}
                         >
                           Editar
                         </button>
-
                         <button
-                          className={`${styles.btn} ${styles.btnDanger}`}
                           type="button"
+                          className={`${styles.tileAction} ${styles.tileActionDanger}`}
                           onClick={() => handleDeleteColor(color.id)}
                         >
                           Excluir
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className={styles.card}>
-          <div className={styles.cardTitleRow}>
-            <h2>Exportar produto</h2>
-            <span className={styles.pill}>
-              {selectedColors.length} cores selecionadas
-            </span>
-          </div>
-
-          <div className={styles.formGrid}>
-            <label className={styles.label}>
-              Nome do produto
-              <input
-                className={styles.input}
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-                placeholder="Ex: Camiseta Lisa Premium"
-              />
-            </label>
-
-            <label className={styles.label}>
-              SKU do pai
-              <div className={styles.skuRow}>
-                <input
-                  className={styles.input}
-                  value={parentSku}
-                  onChange={(e) => setParentSku(e.target.value)}
-                  placeholder="SKU automático (ou clique em Gerar próximo)"
-                />
-
-                <button
-                  className={`${styles.btn} ${styles.btnMuted}`}
-                  type="button"
-                  onClick={handleGenerateNextSku}
-                  disabled={isGeneratingSku}
-                >
-                  {isGeneratingSku ? "Gerando..." : "Gerar próximo"}
-                </button>
+                    </article>
+                  );
+                })}
               </div>
-            </label>
+            )}
 
-            <label className={styles.label}>
-              Tamanhos (vírgula)
-              <input
-                className={styles.input}
-                value={sizesInput}
-                onChange={(e) => setSizesInput(e.target.value)}
-              />
-            </label>
-
-            <label className={styles.label}>
-              Preço (R$)
-              <input
-                className={styles.input}
-                value={priceInput}
-                onChange={(e) => setPriceInput(e.target.value)}
-                placeholder="79,90"
-              />
-            </label>
-
-            <label className={styles.label}>
-              Peso (kg)
-              <input
-                className={styles.input}
-                value={weightInput}
-                onChange={(e) => setWeightInput(e.target.value)}
-                placeholder="0,25"
-              />
-            </label>
-          </div>
-
-          <p className={styles.muted}>
-            Variações seguem ordem estável: cor.slug + tamanho. SKU filho = SKU pai + sufixo de 2 dígitos.
-          </p>
-
-          <div className={styles.buttonRow}>
-
-            <button
-              className={`${styles.btn} ${styles.btnPrimary}`}
-              type="button"
-              onClick={handleExportBling}
+            <form
+              onSubmit={editingColorId ? handleUpdateColor : handleCreateColor}
+              className={styles.newColor}
             >
-              Exportar para Bling
+              <h3>{editingColorId ? "Editar cor" : "Adicionar nova cor"}</h3>
+
+              <div className={styles.newColorFields}>
+                <label className={styles.label}>
+                  Nome da cor
+                  <input
+                    className={styles.input}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ex: Azul Marinho"
+                    required
+                  />
+                </label>
+
+                <label className={styles.label}>
+                  <span>
+                    Slug <span className={styles.optional}>(opcional)</span>
+                  </span>
+                  <input
+                    className={styles.input}
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value)}
+                    placeholder="Gerado automaticamente"
+                  />
+                </label>
+              </div>
+
+              <div className={styles.buttonRow}>
+                <button className={`${styles.btn} ${styles.btnPrimary}`} type="submit">
+                  {editingColorId ? "Salvar alterações" : "+ Adicionar cor"}
+                </button>
+
+                {editingColorId ? (
+                  <button
+                    className={`${styles.btn} ${styles.btnMuted}`}
+                    type="button"
+                    onClick={cancelEdit}
+                  >
+                    Cancelar
+                  </button>
+                ) : null}
+              </div>
+              <p className={styles.fieldHint}>
+                O slug é o “apelido” da cor (ex: azul-marinho). Ele define a ordem das variações.
+              </p>
+            </form>
+          </section>
+
+          <div className={styles.sideColumn}>
+            {/* PASSO 2 — DADOS */}
+            <section className={styles.card}>
+              <div className={styles.stepHeader}>
+                <span className={styles.stepNumber}>2</span>
+                <div>
+                  <h2>Dados do produto</h2>
+                  <p className={styles.stepHint}>Preço e peso valem para todas as variações.</p>
+                </div>
+              </div>
+
+              <div className={styles.formGrid}>
+                <label className={styles.label}>
+                  Nome do produto
+                  <input
+                    className={styles.input}
+                    value={productName}
+                    onChange={(e) => setProductName(e.target.value)}
+                    placeholder="Ex: Camiseta Lisa Premium"
+                  />
+                </label>
+
+                <label className={styles.label}>
+                  SKU do pai
+                  <div className={styles.skuRow}>
+                    <input
+                      className={styles.input}
+                      value={parentSku}
+                      onChange={(e) => setParentSku(e.target.value)}
+                      placeholder="Gerado automaticamente"
+                      inputMode="numeric"
+                    />
+                    <button
+                      className={`${styles.btn} ${styles.btnMuted}`}
+                      type="button"
+                      onClick={handleGenerateNextSku}
+                      disabled={isGeneratingSku}
+                    >
+                      {isGeneratingSku ? "Gerando…" : "↻ Gerar próximo"}
+                    </button>
+                  </div>
+                </label>
+
+                <div className={styles.label}>
+                  <label htmlFor="sizes-input">Tamanhos</label>
+                  <input
+                    id="sizes-input"
+                    className={styles.input}
+                    value={sizesInput}
+                    onChange={(e) => setSizesInput(e.target.value)}
+                    placeholder="Separe por vírgula: P,M,G"
+                  />
+                  <div className={styles.presets}>
+                    {SIZE_PRESETS.map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        className={`${styles.preset} ${sizesInput === preset ? styles.presetActive : ""}`}
+                        onClick={() => setSizesInput(preset)}
+                      >
+                        {preset === "U" ? "Tamanho único" : preset.replace(/,/g, " · ")}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={styles.twoCols}>
+                  <label className={styles.label}>
+                    Preço
+                    <span className={styles.affixInput}>
+                      <span className={styles.affix}>R$</span>
+                      <input
+                        className={styles.input}
+                        value={priceInput}
+                        onChange={(e) => setPriceInput(e.target.value)}
+                        placeholder="79,90"
+                        inputMode="decimal"
+                      />
+                    </span>
+                  </label>
+
+                  <label className={styles.label}>
+                    Peso
+                    <span className={styles.affixInput}>
+                      <input
+                        className={styles.input}
+                        value={weightInput}
+                        onChange={(e) => setWeightInput(e.target.value)}
+                        placeholder="0,25"
+                        inputMode="decimal"
+                      />
+                      <span className={styles.affix}>kg</span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            {/* PASSO 3 — EXPORTAR */}
+            <section className={styles.card}>
+              <div className={styles.stepHeader}>
+                <span className={styles.stepNumber}>3</span>
+                <div>
+                  <h2>Revise e exporte</h2>
+                  <p className={styles.stepHint}>Confira as variações antes de baixar.</p>
+                </div>
+              </div>
+
+              <div className={styles.summary}>
+                <div className={styles.summaryItem}>
+                  <span>Cores</span>
+                  <strong>{selectedColors.length}</strong>
+                </div>
+                <span className={styles.summaryOp}>×</span>
+                <div className={styles.summaryItem}>
+                  <span>Tamanhos</span>
+                  <strong>{previewSizes.length}</strong>
+                </div>
+                <span className={styles.summaryOp}>=</span>
+                <div className={`${styles.summaryItem} ${styles.summaryTotal}`}>
+                  <span>Variações</span>
+                  <strong>{variationCount}</strong>
+                </div>
+              </div>
+
+              {variationCount > 0 ? (
+                <ul className={styles.variationList}>
+                  {previewVariations.slice(0, previewLimit).map((v) => (
+                    <li key={`${v.color.id}-${v.size}`}>
+                      <span className={styles.variationSku}>{v.sku}</span>
+                      <span>
+                        {v.color.name} · {v.size}
+                      </span>
+                    </li>
+                  ))}
+                  {variationCount > previewLimit ? (
+                    <li className={styles.variationMore}>
+                      e mais {variationCount - previewLimit} variações…
+                    </li>
+                  ) : null}
+                </ul>
+              ) : (
+                <p className={styles.fieldHint}>
+                  Selecione pelo menos uma cor e um tamanho para ver as variações aqui.
+                </p>
+              )}
+
+              <button
+                className={`${styles.btn} ${styles.btnPrimary} ${styles.btnBig}`}
+                type="button"
+                onClick={handleExportBling}
+              >
+                ⬇ Baixar arquivo para o Bling
+              </button>
+              <p className={styles.fieldHint}>
+                SKU de cada variação = SKU do pai + 2 dígitos (ex: 100001 → 10000101).
+              </p>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.toasts} aria-live="polite">
+        {error ? (
+          <div className={`${styles.toast} ${styles.toastError}`} role="alert">
+            <span>{error}</span>
+            <button type="button" onClick={() => setError(null)} aria-label="Fechar aviso">
+              ×
             </button>
           </div>
-
-          <div className={styles.chips}>
-            {selectedColors.map((color) => (
-              <span key={color.id} className={styles.chip}>
-                {color.name}
-              </span>
-            ))}
+        ) : null}
+        {success ? (
+          <div className={`${styles.toast} ${styles.toastSuccess}`}>
+            <span>{success}</span>
+            <button type="button" onClick={() => setSuccess(null)} aria-label="Fechar aviso">
+              ×
+            </button>
           </div>
-        </section>
+        ) : null}
       </div>
     </main>
   );
