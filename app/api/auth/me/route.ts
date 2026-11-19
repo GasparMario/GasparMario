@@ -1,12 +1,25 @@
 import { NextResponse } from "next/server";
-import { getCurrentSession } from "@/lib/auth-users";
+import { getCurrentAppUser } from "@/lib/auth-users";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await getCurrentSession();
-  if (!session) {
-    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+  try {
+    const user = await getCurrentAppUser();
+    if (!user) {
+      return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+    }
+    return NextResponse.json({
+      uid: user.id,
+      email: user.email,
+      name: user.name,
+      isAdmin: user.isAdmin
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Erro ao ler usuário." },
+      { status: 500 }
+    );
   }
-  return NextResponse.json({ uid: session.uid, email: session.email });
 }

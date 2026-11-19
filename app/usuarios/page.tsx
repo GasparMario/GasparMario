@@ -13,7 +13,12 @@ type AppUser = {
   name: string;
   createdAt: string;
   lastSignInAt: string | null;
+  isAdmin: boolean;
+  isOwner: boolean;
+  nextSku: string | null;
 };
+
+type Me = { uid: string; isAdmin: boolean };
 
 function formatDate(value: string | null) {
   if (!value) return "nunca entrou";
@@ -29,12 +34,16 @@ function formatDate(value: string | null) {
 export default function UsersPage() {
   const router = useRouter();
   const [users, setUsers] = useState<AppUser[]>([]);
-  const [me, setMe] = useState<string | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [startSku, setStartSku] = useState("");
+  const [newIsAdmin, setNewIsAdmin] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [editingSkuId, setEditingSkuId] = useState<string | null>(null);
+  const [skuDraft, setSkuDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -50,14 +59,23 @@ export default function UsersPage() {
   }
 
   useEffect(() => {
-    fetch("/api/auth/me", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => setMe(json?.uid ?? null))
-      .catch(() => null);
-
-    loadUsers()
-      .catch((err) => setError(err.message))
-      .finally(() => setIsLoading(false));
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        if (res.status === 401) {
+          router.push("/login");
+          return;
+        }
+        const json = await res.json();
+        const current: Me = { uid: json.uid, isAdmin: Boolean(json.isAdmin) };
+        setMe(current);
+        if (current.isAdmin) await loadUsers();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Erro ao carregar");
+      } finally {
+        setIsLoading(false);
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -77,7 +95,7 @@ export default function UsersPage() {
       const res = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password })
+        body: JSON.stringify({ name, email, password, startSku, isAdmin: newIsAdmin })
       });
       const json = await res.json();
 
@@ -92,11 +110,62 @@ export default function UsersPage() {
       setName("");
       setEmail("");
       setPassword("");
+      setStartSku("");
+      setNewIsAdmin(false);
       await loadUsers();
     } catch {
       setError("Não foi possível conectar. Tente de novo.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function patchUser(user: AppUser, body: { isAdmin?: boolean; nextSku?: string }) {
+    setError(null);
+    const res = await fetch(`/api/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || "Erro ao alterar usuário");
+      return false;
+    }
+    await loadUsers();
+    return true;
+  }
+
+  async function handleToggleAdmin(user: AppUser) {
+    const becomingAdmin = !user.isAdmin;
+    const who = user.name || user.email;
+    const confirmed = window.confirm(
+      becomingAdmin
+        ? `Tornar ${who} administrador? Essa pessoa vai poder criar e remover acessos.`
+        : `Tirar o acesso de administrador de ${who}?`
+    );
+    if (!confirmed) return;
+
+    if (await patchUser(user, { isAdmin: becomingAdmin })) {
+      setSuccess(
+        becomingAdmin ? `${who} agora é administrador.` : `${who} não é mais administrador.`
+      );
+    }
+  }
+
+  function startEditSku(user: AppUser) {
+    setEditingSkuId(user.id);
+    setSkuDraft(user.nextSku || "");
+  }
+
+  async function handleSaveSku(user: AppUser) {
+    if (!/^\d+$/.test(skuDraft.trim())) {
+      setError("O SKU precisa ser só números (ex: 100001).");
+      return;
+    }
+    if (await patchUser(user, { nextSku: skuDraft.trim() })) {
+      setEditingSkuId(null);
+      setSuccess(`O próximo SKU de ${user.name || user.email} será ${skuDraft.trim()}.`);
     }
   }
 
@@ -123,6 +192,8 @@ export default function UsersPage() {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
     router.push("/login");
   }
+
+  const notAllowed = !isLoading && me && !me.isAdmin;
 
   return (
     <main className={styles.page}>
@@ -157,124 +228,230 @@ export default function UsersPage() {
       </header>
 
       <div className={`${styles.shell} ${own.narrow}`}>
-        <section className={styles.intro}>
-          <h1>Quem pode usar o sistema</h1>
-          <p>Crie um acesso para cada pessoa da equipe. Cada um entra com seu próprio e-mail e senha.</p>
-        </section>
-
-        <div className={own.stack}>
+        {notAllowed ? (
           <section className={styles.card}>
-            <div className={styles.stepHeader}>
-              <span className={styles.stepNumber}>+</span>
-              <div>
-                <h2>Novo usuário</h2>
-                <p className={styles.stepHint}>A pessoa já pode entrar logo depois de criado.</p>
-              </div>
+            <div className={styles.emptyState}>
+              Só administradores podem ver e criar usuários.
+              <br />
+              <Link href="/admin" className={own.backLink}>
+                Voltar ao cadastro
+              </Link>
             </div>
-
-            <form className={styles.formGrid} onSubmit={handleCreate}>
-              <div className={styles.twoCols}>
-                <label className={styles.label}>
-                  <span>
-                    Nome <span className={styles.optional}>(opcional)</span>
-                  </span>
-                  <input
-                    className={styles.input}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Ex: Gabriel"
-                  />
-                </label>
-
-                <label className={styles.label}>
-                  E-mail
-                  <input
-                    className={styles.input}
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="pessoa@exemplo.com"
-                    autoComplete="off"
-                    required
-                  />
-                </label>
-              </div>
-
-              <label className={styles.label}>
-                Senha inicial
-                <input
-                  className={styles.input}
-                  type="text"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Pelo menos 8 caracteres"
-                  autoComplete="new-password"
-                  required
-                />
-              </label>
-
-              <div className={styles.buttonRow}>
-                <button
-                  className={`${styles.btn} ${styles.btnPrimary}`}
-                  type="submit"
-                  disabled={isSaving}
-                >
-                  {isSaving ? "Criando…" : "Criar acesso"}
-                </button>
-              </div>
-            </form>
           </section>
+        ) : (
+          <>
+            <section className={styles.intro}>
+              <h1>Quem pode usar o sistema</h1>
+              <p>
+                Crie um acesso para cada pessoa. Cada uma vê só as próprias cores e tem a própria
+                sequência de SKU.
+              </p>
+            </section>
 
-          <section className={styles.card}>
-            <div className={styles.stepHeader}>
-              <span className={styles.stepNumber}>{users.length}</span>
-              <div>
-                <h2>Usuários com acesso</h2>
-                <p className={styles.stepHint}>Remova quem não deve mais entrar no sistema.</p>
-              </div>
-            </div>
+            <div className={own.stack}>
+              <section className={styles.card}>
+                <div className={styles.stepHeader}>
+                  <span className={styles.stepNumber}>+</span>
+                  <div>
+                    <h2>Novo usuário</h2>
+                    <p className={styles.stepHint}>A pessoa já pode entrar logo depois de criado.</p>
+                  </div>
+                </div>
 
-            {isLoading ? (
-              <div className={styles.emptyState}>Carregando usuários…</div>
-            ) : users.length === 0 ? (
-              <div className={styles.emptyState}>Nenhum usuário encontrado.</div>
-            ) : (
-              <ul className={own.userList}>
-                {users.map((user) => {
-                  const isMe = user.id === me;
-                  const initial = (user.name || user.email).trim().charAt(0).toUpperCase();
-
-                  return (
-                    <li key={user.id} className={own.userRow}>
-                      <span className={own.avatar} aria-hidden="true">
-                        {initial}
+                <form className={styles.formGrid} onSubmit={handleCreate}>
+                  <div className={styles.twoCols}>
+                    <label className={styles.label}>
+                      <span>
+                        Nome <span className={styles.optional}>(opcional)</span>
                       </span>
-                      <div className={own.userInfo}>
-                        <strong>
-                          {user.name || user.email}
-                          {isMe ? <span className={own.meTag}>você</span> : null}
-                        </strong>
-                        {user.name ? <span>{user.email}</span> : null}
-                        <span className={own.lastSeen}>
-                          Último acesso: {formatDate(user.lastSignInAt)}
-                        </span>
-                      </div>
-                      {isMe ? null : (
-                        <button
-                          type="button"
-                          className={`${styles.btn} ${styles.btnSmall} ${own.removeBtn}`}
-                          onClick={() => handleDelete(user)}
-                        >
-                          Remover
-                        </button>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-        </div>
+                      <input
+                        className={styles.input}
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Ex: Loja Falcon"
+                      />
+                    </label>
+
+                    <label className={styles.label}>
+                      E-mail
+                      <input
+                        className={styles.input}
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="pessoa@exemplo.com"
+                        autoComplete="off"
+                        required
+                      />
+                    </label>
+                  </div>
+
+                  <div className={styles.twoCols}>
+                    <label className={styles.label}>
+                      Senha inicial
+                      <input
+                        className={styles.input}
+                        type="text"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Pelo menos 8 caracteres"
+                        autoComplete="new-password"
+                        required
+                      />
+                    </label>
+
+                    <label className={styles.label}>
+                      <span>
+                        SKU inicial <span className={styles.optional}>(opcional)</span>
+                      </span>
+                      <input
+                        className={styles.input}
+                        value={startSku}
+                        onChange={(e) => setStartSku(e.target.value)}
+                        placeholder="100001"
+                        inputMode="numeric"
+                      />
+                    </label>
+                  </div>
+
+                  <label className={own.checkRow}>
+                    <input
+                      type="checkbox"
+                      checked={newIsAdmin}
+                      onChange={(e) => setNewIsAdmin(e.target.checked)}
+                    />
+                    <span>
+                      <strong>Administrador</strong>
+                      <span>Pode ver esta página, criar e remover acessos.</span>
+                    </span>
+                  </label>
+
+                  <div className={styles.buttonRow}>
+                    <button
+                      className={`${styles.btn} ${styles.btnPrimary}`}
+                      type="submit"
+                      disabled={isSaving}
+                    >
+                      {isSaving ? "Criando…" : "Criar acesso"}
+                    </button>
+                  </div>
+                  <p className={styles.fieldHint}>
+                    SKU inicial: o primeiro SKU que essa pessoa vai usar no Bling dela. Se deixar em
+                    branco, começa em 100001. Dá para mudar depois.
+                  </p>
+                </form>
+              </section>
+
+              <section className={styles.card}>
+                <div className={styles.stepHeader}>
+                  <span className={styles.stepNumber}>{users.length}</span>
+                  <div>
+                    <h2>Usuários com acesso</h2>
+                    <p className={styles.stepHint}>
+                      Ajuste o próximo SKU, dê poder de administrador ou remova quem não deve mais
+                      entrar.
+                    </p>
+                  </div>
+                </div>
+
+                {isLoading ? (
+                  <div className={styles.emptyState}>Carregando usuários…</div>
+                ) : users.length === 0 ? (
+                  <div className={styles.emptyState}>Nenhum usuário encontrado.</div>
+                ) : (
+                  <ul className={own.userList}>
+                    {users.map((user) => {
+                      const isMe = user.id === me?.uid;
+                      const initial = (user.name || user.email).trim().charAt(0).toUpperCase();
+                      const isEditingSku = editingSkuId === user.id;
+
+                      return (
+                        <li key={user.id} className={own.userRow}>
+                          <span className={own.avatar} aria-hidden="true">
+                            {initial}
+                          </span>
+                          <div className={own.userInfo}>
+                            <strong>
+                              {user.name || user.email}
+                              {user.isOwner ? (
+                                <span className={own.tag}>dono</span>
+                              ) : user.isAdmin ? (
+                                <span className={own.tag}>admin</span>
+                              ) : null}
+                              {isMe ? <span className={own.tagLight}>você</span> : null}
+                            </strong>
+                            {user.name ? <span>{user.email}</span> : null}
+
+                            {isEditingSku ? (
+                              <span className={own.skuEdit}>
+                                Próximo SKU:
+                                <input
+                                  className={own.skuInput}
+                                  value={skuDraft}
+                                  onChange={(e) => setSkuDraft(e.target.value)}
+                                  inputMode="numeric"
+                                  autoFocus
+                                />
+                                <button
+                                  type="button"
+                                  className={own.linkBtn}
+                                  onClick={() => handleSaveSku(user)}
+                                >
+                                  Salvar
+                                </button>
+                                <button
+                                  type="button"
+                                  className={own.linkBtnMuted}
+                                  onClick={() => setEditingSkuId(null)}
+                                >
+                                  Cancelar
+                                </button>
+                              </span>
+                            ) : (
+                              <span className={own.skuLine}>
+                                Próximo SKU: <b>{user.nextSku ?? "100001 (padrão)"}</b>
+                                <button
+                                  type="button"
+                                  className={own.linkBtn}
+                                  onClick={() => startEditSku(user)}
+                                >
+                                  Alterar
+                                </button>
+                              </span>
+                            )}
+
+                            <span className={own.lastSeen}>
+                              Último acesso: {formatDate(user.lastSignInAt)}
+                            </span>
+                          </div>
+
+                          {isMe || user.isOwner ? null : (
+                            <div className={own.rowActions}>
+                              <button
+                                type="button"
+                                className={`${styles.btn} ${styles.btnSmall} ${styles.btnMuted}`}
+                                onClick={() => handleToggleAdmin(user)}
+                              >
+                                {user.isAdmin ? "Tirar admin" : "Tornar admin"}
+                              </button>
+                              <button
+                                type="button"
+                                className={`${styles.btn} ${styles.btnSmall} ${own.removeBtn}`}
+                                onClick={() => handleDelete(user)}
+                              >
+                                Remover
+                              </button>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            </div>
+          </>
+        )}
       </div>
 
       <div className={styles.toasts} aria-live="polite">
