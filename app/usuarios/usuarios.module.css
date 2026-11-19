@@ -1,0 +1,83 @@
+.narrow {
+  max-width: 760px;
+}
+
+.stack {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.userList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #f0eee9;
+  border-radius: 1rem;
+}
+
+.userRow {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.85rem 1rem;
+}
+
+.userRow + .userRow {
+  border-top: 1px solid #f4f4f5;
+}
+
+.avatar {
+  flex-shrink: 0;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #f4f4f5;
+  color: #18181b;
+  font-weight: 800;
+}
+
+.userInfo {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.userInfo strong {
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.userInfo span {
+  font-size: 0.84rem;
+  color: #52525b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userInfo .lastSeen {
+  font-size: 0.76rem;
+  color: #a1a1aa;
+}
+
+.meTag {
+  font-size: 0.7rem !important;
+  font-weight: 700;
+  color: #ffffff !important;
+  background: #18181b;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+}
+
+.removeBtn {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.removeBtn:hover {
+  background: #fee2e2;
+}
