@@ -277,7 +277,7 @@ export default function AdminPage() {
     setSelectedColorIds([]);
   }
 
-  async function handleGenerateNextSku() {
+  async function handleGenerateNextSku(): Promise<string | null> {
     setError(null);
     setIsGeneratingSku(true);
 
@@ -293,12 +293,34 @@ export default function AdminPage() {
         throw new Error("API retornou SKU inválido");
       }
 
-      setParentSku(String(json.sku));
+      const nextSku = String(json.sku);
+      setParentSku(nextSku);
+      return nextSku;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao gerar SKU");
+      return null;
     } finally {
       setIsGeneratingSku(false);
     }
+  }
+
+  // Depois de exportar, já deixa o próximo SKU pronto para o próximo produto.
+  // Se o banco devolver o mesmo SKU que acabou de ser usado, avisa em vermelho
+  // para não sobrescrever um produto no Bling sem querer.
+  async function prepareNextSkuAfterExport(usedSku: string) {
+    const nextSku = await handleGenerateNextSku();
+    if (!nextSku) return;
+
+    if (nextSku === usedSku) {
+      setError(
+        `Atenção: o próximo SKU veio igual ao que você acabou de usar (${usedSku}). Troque o SKU antes de exportar outro produto, senão o Bling vai sobrescrever o anterior.`
+      );
+      return;
+    }
+
+    setSuccess((prev) =>
+      prev ? `${prev} O próximo SKU (${nextSku}) já está pronto.` : prev
+    );
   }
 
   function getValidatedExportData() {
@@ -604,6 +626,8 @@ export default function AdminPage() {
     setSuccess(
       `Pronto! O arquivo bling-import.csv foi baixado com ${orderedVariations.length} variações. Agora é só importar no Bling.`
     );
+
+    void prepareNextSkuAfterExport(skuBase);
   }
 
   const variationCount = previewVariations.length;
@@ -971,7 +995,8 @@ export default function AdminPage() {
                 ⬇ Baixar arquivo para o Bling
               </button>
               <p className={styles.fieldHint}>
-                SKU de cada variação = SKU do pai + 2 dígitos (ex: 100001 → 10000101).
+                Depois de baixar, o próximo SKU já é gerado sozinho. SKU de cada variação = SKU do
+                pai + 2 dígitos (ex: 100001 → 10000101).
               </p>
             </section>
           </div>
