@@ -116,3 +116,16 @@ export function translateAuthError(message: string): string {
   if (/invalid.*email|email.*invalid/i.test(message)) return "Informe um e-mail válido.";
   return message;
 }
+
+// Id do usuário logado (ou null). O middleware já barra quem não está logado,
+// isto é uma segunda checagem dentro de cada rota.
+export async function getCurrentUserId(): Promise<string | null> {
+  const session = await getCurrentSession();
+  return session?.uid ?? null;
+}
+
+// O primeiro usuário criado no sistema (o dono das cores antigas).
+export async function isFirstAppUser(uid: string): Promise<boolean> {
+  const users = await listAppUsers();
+  return users[0]?.id === uid;
+}

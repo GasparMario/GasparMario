@@ -66,6 +66,7 @@ export default function AdminPage() {
   const [colorSearch, setColorSearch] = useState("");
   const [uploadingColorId, setUploadingColorId] = useState<string | null>(null);
   const [isLoadingColors, setIsLoadingColors] = useState(true);
+  const [needsFirstSku, setNeedsFirstSku] = useState(false);
 
   const didAutoSkuRef = useRef(false);
 
@@ -288,11 +289,18 @@ export default function AdminPage() {
         throw new Error(json.error || "Erro ao gerar próximo SKU");
       }
 
+      if (json.sku == null && json.needsFirstSku) {
+        // Primeira vez desta pessoa: ela digita o SKU inicial.
+        setNeedsFirstSku(true);
+        return null;
+      }
+
       if (!json.sku || !/^\d+$/.test(String(json.sku))) {
         throw new Error("API retornou SKU inválido");
       }
 
       const nextSku = String(json.sku);
+      setNeedsFirstSku(false);
       setParentSku(nextSku);
       return nextSku;
     } catch (err) {
@@ -307,6 +315,27 @@ export default function AdminPage() {
   // Se o banco devolver o mesmo SKU que acabou de ser usado, avisa em vermelho
   // para não sobrescrever um produto no Bling sem querer.
   async function prepareNextSkuAfterExport(usedSku: string) {
+    // Avisa o contador desta pessoa qual SKU foi usado
+    // (se foi digitado à mão e é maior, o contador pula para ele).
+    try {
+      const res = await fetch("/api/sku/used", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sku: usedSku })
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Erro ao registrar o SKU usado");
+      }
+    } catch (err) {
+      setError(
+        `O arquivo foi baixado, mas não consegui atualizar o contador de SKU (${
+          err instanceof Error ? err.message : "erro desconhecido"
+        }). Confira o SKU antes de exportar o próximo produto.`
+      );
+      return;
+    }
+
     const nextSku = await handleGenerateNextSku();
     if (!nextSku) return;
 
@@ -873,7 +902,7 @@ export default function AdminPage() {
                       className={styles.input}
                       value={parentSku}
                       onChange={(e) => setParentSku(e.target.value)}
-                      placeholder="Gerado automaticamente"
+                      placeholder={needsFirstSku ? "Digite o SKU inicial" : "Gerado automaticamente"}
                       inputMode="numeric"
                     />
                     <button
@@ -885,6 +914,12 @@ export default function AdminPage() {
                       {isGeneratingSku ? "Gerando…" : "↻ Gerar próximo"}
                     </button>
                   </div>
+                  {needsFirstSku ? (
+                    <span className={styles.firstSkuHint}>
+                      Primeira vez por aqui? Digite o SKU inicial que você quer usar (ex: 100001).
+                      Depois do primeiro export, o sistema continua a sequência sozinho.
+                    </span>
+                  ) : null}
                 </label>
 
                 <div className={styles.label}>
