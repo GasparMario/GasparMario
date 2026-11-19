@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./admin.module.css";
@@ -44,18 +45,10 @@ function quoteCsvString(value: string) {
 export default function AdminPage() {
   const router = useRouter();
 
-  function handleLogout() {
-    localStorage.removeItem("ellos-auth");
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
     router.push("/login");
   }
-
-  useEffect(() => {
-    const auth = localStorage.getItem("ellos-auth");
-
-    if (auth !== "true") {
-      router.push("/login");
-    }
-  }, [router]);
 
   const [colors, setColors] = useState<Color[]>([]);
   const [name, setName] = useState("");
@@ -78,6 +71,12 @@ export default function AdminPage() {
 
   async function loadColors() {
     const res = await fetch("/api/colors", { cache: "no-store" });
+
+    if (res.status === 401) {
+      router.push("/login");
+      return;
+    }
+
     const json = await res.json();
 
     if (!res.ok) {
@@ -650,13 +649,18 @@ export default function AdminPage() {
             <span className={styles.brandTitle}>Cadastro de Produtos</span>
           </div>
 
-          <button
-            className={`${styles.btn} ${styles.btnGhost}`}
-            type="button"
-            onClick={handleLogout}
-          >
-            Sair
-          </button>
+          <nav className={styles.topbarActions}>
+            <Link className={`${styles.btn} ${styles.btnGhost}`} href="/usuarios">
+              Usuários
+            </Link>
+            <button
+              className={`${styles.btn} ${styles.btnGhost}`}
+              type="button"
+              onClick={handleLogout}
+            >
+              Sair
+            </button>
+          </nav>
         </div>
       </header>
 
