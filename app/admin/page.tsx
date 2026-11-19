@@ -66,7 +66,7 @@ export default function AdminPage() {
   const [colorSearch, setColorSearch] = useState("");
   const [uploadingColorId, setUploadingColorId] = useState<string | null>(null);
   const [isLoadingColors, setIsLoadingColors] = useState(true);
-  const [needsFirstSku, setNeedsFirstSku] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const didAutoSkuRef = useRef(false);
 
@@ -91,6 +91,13 @@ export default function AdminPage() {
     loadColors()
       .catch((err) => setError(err.message))
       .finally(() => setIsLoadingColors(false));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => setIsAdmin(Boolean(json?.isAdmin)))
+      .catch(() => null);
   }, []);
 
   useEffect(() => {
@@ -289,18 +296,11 @@ export default function AdminPage() {
         throw new Error(json.error || "Erro ao gerar próximo SKU");
       }
 
-      if (json.sku == null && json.needsFirstSku) {
-        // Primeira vez desta pessoa: ela digita o SKU inicial.
-        setNeedsFirstSku(true);
-        return null;
-      }
-
       if (!json.sku || !/^\d+$/.test(String(json.sku))) {
         throw new Error("API retornou SKU inválido");
       }
 
       const nextSku = String(json.sku);
-      setNeedsFirstSku(false);
       setParentSku(nextSku);
       return nextSku;
     } catch (err) {
@@ -679,9 +679,11 @@ export default function AdminPage() {
           </div>
 
           <nav className={styles.topbarActions}>
-            <Link className={`${styles.btn} ${styles.btnGhost}`} href="/usuarios">
-              Usuários
-            </Link>
+            {isAdmin ? (
+              <Link className={`${styles.btn} ${styles.btnGhost}`} href="/usuarios">
+                Usuários
+              </Link>
+            ) : null}
             <button
               className={`${styles.btn} ${styles.btnGhost}`}
               type="button"
@@ -902,7 +904,7 @@ export default function AdminPage() {
                       className={styles.input}
                       value={parentSku}
                       onChange={(e) => setParentSku(e.target.value)}
-                      placeholder={needsFirstSku ? "Digite o SKU inicial" : "Gerado automaticamente"}
+                      placeholder="Gerado automaticamente"
                       inputMode="numeric"
                     />
                     <button
@@ -914,12 +916,6 @@ export default function AdminPage() {
                       {isGeneratingSku ? "Gerando…" : "↻ Gerar próximo"}
                     </button>
                   </div>
-                  {needsFirstSku ? (
-                    <span className={styles.firstSkuHint}>
-                      Primeira vez por aqui? Digite o SKU inicial que você quer usar (ex: 100001).
-                      Depois do primeiro export, o sistema continua a sequência sozinho.
-                    </span>
-                  ) : null}
                 </label>
 
                 <div className={styles.label}>

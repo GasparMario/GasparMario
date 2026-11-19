@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
-import { getCurrentUserId, isFirstAppUser } from "@/lib/auth-users";
+import { DEFAULT_START_SKU, getCurrentUserId, isFirstAppUser } from "@/lib/auth-users";
 import { extractNextSkuRpcValue, normalizeNumericSku, type NextSkuRpcResponse } from "@/lib/sku";
 
 export const runtime = "nodejs";
@@ -17,8 +17,8 @@ function fail(message: string, details?: string, status = 500) {
 // - Já tem contador: soma 1 e devolve.
 // - Primeiro usuário (Mario) sem contador: continua de onde o contador antigo
 //   (função next_sku do Supabase) parou.
-// - Outras pessoas sem contador: devolve sku = null, para a tela pedir
-//   o SKU inicial. Depois do primeiro export, o contador começa dali.
+// - Outras pessoas sem contador: começa em 100001 (o administrador pode
+//   ajustar o próximo SKU de cada pessoa na página Usuários).
 export async function GET() {
   try {
     const ownerId = await getCurrentUserId();
@@ -40,20 +40,16 @@ export async function GET() {
       return NextResponse.json({ sku }, { headers: NO_STORE });
     }
 
-    if (!(await isFirstAppUser(ownerId))) {
-      return NextResponse.json({ sku: null, needsFirstSku: true }, { headers: NO_STORE });
-    }
+    let seed: string | null = String(DEFAULT_START_SKU);
 
-    // Primeiro usuário: semeia o contador com o contador antigo.
-    const { data: legacy, error: legacyError } = await supabase.rpc("next_sku");
-    if (legacyError) {
-      return fail("Falha ao gerar SKU via Supabase RPC `next_sku`.", legacyError.message);
-    }
-
-    const legacyRaw = extractNextSkuRpcValue(legacy as NextSkuRpcResponse);
-    const seed = legacyRaw == null ? null : normalizeNumericSku(legacyRaw);
-    if (!seed) {
-      return NextResponse.json({ sku: null, needsFirstSku: true }, { headers: NO_STORE });
+    if (await isFirstAppUser(ownerId)) {
+      // Primeiro usuário: continua de onde o contador antigo parou.
+      const { data: legacy, error: legacyError } = await supabase.rpc("next_sku");
+      if (legacyError) {
+        return fail("Falha ao gerar SKU via Supabase RPC `next_sku`.", legacyError.message);
+      }
+      const legacyRaw = extractNextSkuRpcValue(legacy as NextSkuRpcResponse);
+      seed = (legacyRaw == null ? null : normalizeNumericSku(legacyRaw)) || seed;
     }
 
     const { data: started, error: startError } = await supabase.rpc("start_sku_counter", {
