@@ -35,7 +35,7 @@ function normalizeDecimal(value: string): string {
   return cleaned.replace(/\s+/g, "").replace(",", ".");
 }
 
-const SIZE_PRESETS = ["P,M,G", "PP,P,M,G,GG", "P,M,G,GG,XG", "U"];
+const SIZE_PRESETS = ["P,M,G", "PP,P,M,G,GG", "P,M,G,GG,XG", "PP,P,M,G,GG,XG,G2,G3", "U"];
 
 function quoteCsvString(value: string) {
   return `"${value.replace(/"/g, '""')}"`;
