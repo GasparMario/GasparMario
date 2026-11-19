@@ -68,7 +68,7 @@ $$;
 create unique index if not exists colors_owner_slug_key on public.colors (owner_id, slug);
 
 -- 4) Contador de SKU de cada pessoa.
-create table if not exists public.sku_counters (
+create table if not exists public.user_sku_counters (
   owner_id uuid primary key,
   last_sku bigint not null,
   updated_at timestamptz not null default now()
@@ -80,7 +80,7 @@ create or replace function public.next_sku_for_owner(p_owner uuid)
 returns bigint
 language sql
 as $$
-  update public.sku_counters
+  update public.user_sku_counters
   set last_sku = last_sku + 1, updated_at = now()
   where owner_id = p_owner
   returning last_sku;
@@ -94,7 +94,7 @@ as $$
 declare
   v bigint;
 begin
-  insert into public.sku_counters (owner_id, last_sku)
+  insert into public.user_sku_counters (owner_id, last_sku)
   values (p_owner, p_start)
   on conflict (owner_id) do nothing
   returning last_sku into v;
@@ -114,15 +114,15 @@ create or replace function public.mark_sku_used(p_owner uuid, p_sku bigint)
 returns void
 language sql
 as $$
-  insert into public.sku_counters (owner_id, last_sku)
+  insert into public.user_sku_counters (owner_id, last_sku)
   values (p_owner, p_sku)
   on conflict (owner_id) do update
-  set last_sku = greatest(public.sku_counters.last_sku, excluded.last_sku),
+  set last_sku = greatest(public.user_sku_counters.last_sku, excluded.last_sku),
       updated_at = now();
 $$;
 
 -- Ninguém de fora acessa essas tabelas/funções direto; só o servidor do site.
-alter table public.sku_counters enable row level security;
+alter table public.user_sku_counters enable row level security;
 revoke all on function public.next_sku_for_owner(uuid) from public, anon, authenticated;
 revoke all on function public.start_sku_counter(uuid, bigint) from public, anon, authenticated;
 revoke all on function public.mark_sku_used(uuid, bigint) from public, anon, authenticated;
