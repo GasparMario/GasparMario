@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { parseSku, setNextSku } from "@/lib/auth-users";
 import { requireAdmin } from "@/lib/require-admin";
 import { disconnect } from "@/lib/bling";
-import { listAllStores, renameStore, setStoreMembers } from "@/lib/stores";
+import { deleteStore, listAllStores, renameStore, setStoreMembers } from "@/lib/stores";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -85,6 +85,27 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Erro ao alterar loja." },
+      { status: 400 }
+    );
+  }
+}
+
+// Exclui uma loja (cores, SKU, conexão com o Bling e membros). Só administradores.
+export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const { response } = await requireAdmin();
+    if (response) return response;
+
+    const stores = await listAllStores();
+    if (!stores.some((s) => s.id === params.id)) {
+      return NextResponse.json({ error: "Loja não encontrada." }, { status: 404 });
+    }
+
+    await deleteStore(params.id);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Erro ao excluir loja." },
       { status: 400 }
     );
   }

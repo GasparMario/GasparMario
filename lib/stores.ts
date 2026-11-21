@@ -134,3 +134,33 @@ export async function getNextSkus(): Promise<Map<string, string>> {
   }
   return map;
 }
+
+// Exclui uma loja e tudo que é dela: cores, contador de SKU, conexão com o
+// Bling e a lista de quem usa. Não mexe no Bling em si (os produtos já
+// enviados continuam lá).
+export async function deleteStore(storeId: string) {
+  const supabase = getSupabaseServerClient();
+
+  const steps: [string, PromiseLike<{ error: { message: string } | null }>][] = [
+    ["cores", supabase.from("colors").delete().eq("store_id", storeId)],
+    ["contador de SKU", supabase.from("user_sku_counters").delete().eq("owner_id", storeId)],
+    ["conexão com o Bling", supabase.from("bling_connections").delete().eq("owner_id", storeId)],
+    ["quem usa", supabase.from("store_members").delete().eq("store_id", storeId)]
+  ];
+
+  for (const [label, step] of steps) {
+    const { error } = await step;
+    if (error) throw new Error(`Não consegui apagar ${label} da loja: ${error.message}`);
+  }
+
+  const { error } = await supabase.from("stores").delete().eq("id", storeId);
+  if (error) throw new Error(error.message);
+}
+
+export async function countStoreColors(storeId: string): Promise<number> {
+  const { count } = await getSupabaseServerClient()
+    .from("colors")
+    .select("id", { count: "exact", head: true })
+    .eq("store_id", storeId);
+  return count ?? 0;
+}

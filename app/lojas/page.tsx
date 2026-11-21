@@ -15,6 +15,7 @@ type StoreRow = {
   nextSku: string | null;
   blingConnectedAt: string | null;
   ownAppHint: string | null;
+  colorCount: number;
 };
 
 type UserRow = { id: string; name: string; email: string; isAdmin: boolean };
@@ -198,6 +199,31 @@ export default function StoresPage() {
     }
     setEditingId(null);
     setSuccess(`Loja "${draftName.trim() || store.name}" atualizada.`);
+    await load();
+  }
+
+  async function handleDeleteStore(store: StoreRow) {
+    const typed = window.prompt(
+      `Excluir a loja "${store.name}"?\n\n` +
+        `Isso apaga as ${store.colorCount} cores dela, o contador de SKU e a conexão com o Bling. ` +
+        `Os produtos que já estão no Bling NÃO são apagados.\n\n` +
+        `Não dá para desfazer. Para confirmar, digite o nome da loja:`
+    );
+    if (typed === null) return;
+    if (typed.trim().toLowerCase() !== store.name.trim().toLowerCase()) {
+      setError("O nome digitado não confere. A loja não foi excluída.");
+      return;
+    }
+
+    setError(null);
+    const res = await fetch(`/api/admin/stores/${store.id}`, { method: "DELETE" });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(json.error || "Erro ao excluir loja");
+      return;
+    }
+    setEditingId(null);
+    setSuccess(`Loja "${store.name}" excluída.`);
     await load();
   }
 
@@ -477,6 +503,13 @@ export default function StoresPage() {
                                 onClick={() => setEditingId(null)}
                               >
                                 Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                className={`${styles.btn} ${styles.btnSmall} ${lojas.ljDeleteBtn}`}
+                                onClick={() => handleDeleteStore(store)}
+                              >
+                                Excluir loja
                               </button>
                             </div>
                           ) : null}
