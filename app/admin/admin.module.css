@@ -38,6 +38,41 @@
   text-decoration: none;
 }
 
+.storePicker {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: #71717a;
+}
+
+.storePicker select {
+  border: 1px solid #e4e4e7;
+  border-radius: 0.7rem;
+  padding: 0.5rem 0.7rem;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #18181b;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.storeName {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #18181b;
+  padding: 0 0.4rem;
+}
+
+.inlineLink {
+  display: inline-block;
+  margin-top: 0.8rem;
+  color: #18181b;
+  font-weight: 700;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -815,8 +850,14 @@
   }
 
   .brandDivider,
-  .brandTitle {
+  .brandTitle,
+  .storePicker > span {
     display: none;
+  }
+
+  .topbarActions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .intro h1 {

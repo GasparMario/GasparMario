@@ -1,0 +1,113 @@
+.ljList {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.ljStore {
+  border: 1px solid #ebe9e4;
+  border-radius: 1rem;
+  padding: 1rem 1.1rem;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.ljStoreHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.ljStoreHead h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.ljRows {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ljRow {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.88rem;
+}
+
+.ljRowLabel {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #71717a;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.ljRowValue {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ljMuted {
+  color: #a1a1aa;
+}
+
+.ljMono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700;
+}
+
+.ljSkuInput {
+  max-width: 180px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.ljChip {
+  font-size: 0.8rem;
+  font-weight: 650;
+  background: #f4f4f5;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+}
+
+.ljChecks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  font-weight: 500;
+}
+
+.ljCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+
+.ljCheck input {
+  accent-color: #18181b;
+}
+
+.ljCheck em {
+  font-style: normal;
+  font-size: 0.74rem;
+  color: #a1a1aa;
+}
+
+.ljLinkBtn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .ljRow {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
+}

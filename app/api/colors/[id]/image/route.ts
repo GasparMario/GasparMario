@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStorageBucket, getSupabaseServerClient } from "@/lib/supabase-server";
-import { getCurrentUserId } from "@/lib/auth-users";
+import { getStoreContext } from "@/lib/stores";
 
 function safeExt(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase() || "jpg";
@@ -13,10 +13,9 @@ function randomSuffix(): string {
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ownerId = await getCurrentUserId();
-    if (!ownerId) {
-      return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
-    }
+    const { ctx, response } = await getStoreContext();
+    if (response) return response;
+    const storeId = ctx.store.id;
     const formData = await request.formData();
     const image = formData.get("image");
 
@@ -30,7 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .from("colors")
       .select("id,slug")
       .eq("id", params.id)
-      .eq("owner_id", ownerId)
+      .eq("store_id", storeId)
       .single();
 
     if (colorError || !color?.slug) {
@@ -61,7 +60,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .from("colors")
       .update({ image_url: imageUrl })
       .eq("id", params.id)
-      .eq("owner_id", ownerId)
+      .eq("store_id", storeId)
       .select("id,name,slug,image_url")
       .single();
 

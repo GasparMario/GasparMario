@@ -15,8 +15,10 @@ type AppUser = {
   lastSignInAt: string | null;
   isAdmin: boolean;
   isOwner: boolean;
-  nextSku: string | null;
+  storeNames: string[];
 };
+
+type StoreOption = { id: string; name: string };
 
 type Me = { uid: string; isAdmin: boolean };
 
@@ -39,11 +41,10 @@ export default function UsersPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [startSku, setStartSku] = useState("");
+  const [storeOptions, setStoreOptions] = useState<StoreOption[]>([]);
+  const [newStoreIds, setNewStoreIds] = useState<string[]>([]);
   const [newIsAdmin, setNewIsAdmin] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [editingSkuId, setEditingSkuId] = useState<string | null>(null);
-  const [skuDraft, setSkuDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -56,6 +57,7 @@ export default function UsersPage() {
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Erro ao listar usuários");
     setUsers(json.users);
+    setStoreOptions(json.stores ?? []);
   }
 
   useEffect(() => {
@@ -95,7 +97,7 @@ export default function UsersPage() {
       const res = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, startSku, isAdmin: newIsAdmin })
+        body: JSON.stringify({ name, email, password, storeIds: newStoreIds, isAdmin: newIsAdmin })
       });
       const json = await res.json();
 
@@ -110,7 +112,7 @@ export default function UsersPage() {
       setName("");
       setEmail("");
       setPassword("");
-      setStartSku("");
+      setNewStoreIds([]);
       setNewIsAdmin(false);
       await loadUsers();
     } catch {
@@ -120,7 +122,7 @@ export default function UsersPage() {
     }
   }
 
-  async function patchUser(user: AppUser, body: { isAdmin?: boolean; nextSku?: string }) {
+  async function patchUser(user: AppUser, body: { isAdmin?: boolean }) {
     setError(null);
     const res = await fetch(`/api/users/${user.id}`, {
       method: "PATCH",
@@ -150,22 +152,6 @@ export default function UsersPage() {
       setSuccess(
         becomingAdmin ? `${who} agora é administrador.` : `${who} não é mais administrador.`
       );
-    }
-  }
-
-  function startEditSku(user: AppUser) {
-    setEditingSkuId(user.id);
-    setSkuDraft(user.nextSku || "");
-  }
-
-  async function handleSaveSku(user: AppUser) {
-    if (!/^\d+$/.test(skuDraft.trim())) {
-      setError("O SKU precisa ser só números (ex: 100001).");
-      return;
-    }
-    if (await patchUser(user, { nextSku: skuDraft.trim() })) {
-      setEditingSkuId(null);
-      setSuccess(`O próximo SKU de ${user.name || user.email} será ${skuDraft.trim()}.`);
     }
   }
 
@@ -243,8 +229,12 @@ export default function UsersPage() {
             <section className={styles.intro}>
               <h1>Quem pode usar o sistema</h1>
               <p>
-                Crie um acesso para cada pessoa. Cada uma vê só as próprias cores e tem a própria
-                sequência de SKU.
+                Crie um acesso para cada pessoa e escolha em quais lojas ela trabalha. As cores, o
+                SKU e o Bling ficam na loja (veja a página{" "}
+                <Link href="/lojas" className={own.inlineLink}>
+                  Lojas
+                </Link>
+                ).
               </p>
             </section>
 
@@ -286,8 +276,7 @@ export default function UsersPage() {
                     </label>
                   </div>
 
-                  <div className={styles.twoCols}>
-                    <label className={styles.label}>
+                  <label className={styles.label}>
                       Senha inicial
                       <input
                         className={styles.input}
@@ -300,18 +289,31 @@ export default function UsersPage() {
                       />
                     </label>
 
-                    <label className={styles.label}>
-                      <span>
-                        SKU inicial <span className={styles.optional}>(opcional)</span>
-                      </span>
-                      <input
-                        className={styles.input}
-                        value={startSku}
-                        onChange={(e) => setStartSku(e.target.value)}
-                        placeholder="100001"
-                        inputMode="numeric"
-                      />
-                    </label>
+
+                  <div className={styles.label}>
+                    Lojas que essa pessoa usa
+                    <div className={own.storeChecks}>
+                      {storeOptions.length === 0 ? (
+                        <span className={own.lastSeen}>Nenhuma loja criada ainda.</span>
+                      ) : (
+                        storeOptions.map((store) => (
+                          <label key={store.id} className={own.storeCheck}>
+                            <input
+                              type="checkbox"
+                              checked={newStoreIds.includes(store.id)}
+                              onChange={() =>
+                                setNewStoreIds((ids) =>
+                                  ids.includes(store.id)
+                                    ? ids.filter((x) => x !== store.id)
+                                    : [...ids, store.id]
+                                )
+                              }
+                            />
+                            {store.name}
+                          </label>
+                        ))
+                      )}
+                    </div>
                   </div>
 
                   <label className={own.checkRow}>
@@ -336,8 +338,8 @@ export default function UsersPage() {
                     </button>
                   </div>
                   <p className={styles.fieldHint}>
-                    SKU inicial: o primeiro SKU que essa pessoa vai usar no Bling dela. Se deixar em
-                    branco, começa em 100001. Dá para mudar depois.
+                    Administradores enxergam todas as lojas. Dá para mudar as lojas de cada pessoa
+                    depois, na página Lojas.
                   </p>
                 </form>
               </section>
@@ -348,8 +350,7 @@ export default function UsersPage() {
                   <div>
                     <h2>Usuários com acesso</h2>
                     <p className={styles.stepHint}>
-                      Ajuste o próximo SKU, dê poder de administrador ou remova quem não deve mais
-                      entrar.
+                      Dê poder de administrador ou remova quem não deve mais entrar.
                     </p>
                   </div>
                 </div>
@@ -363,7 +364,6 @@ export default function UsersPage() {
                     {users.map((user) => {
                       const isMe = user.id === me?.uid;
                       const initial = (user.name || user.email).trim().charAt(0).toUpperCase();
-                      const isEditingSku = editingSkuId === user.id;
 
                       return (
                         <li key={user.id} className={own.userRow}>
@@ -382,43 +382,13 @@ export default function UsersPage() {
                             </strong>
                             {user.name ? <span>{user.email}</span> : null}
 
-                            {isEditingSku ? (
-                              <span className={own.skuEdit}>
-                                Próximo SKU:
-                                <input
-                                  className={own.skuInput}
-                                  value={skuDraft}
-                                  onChange={(e) => setSkuDraft(e.target.value)}
-                                  inputMode="numeric"
-                                  autoFocus
-                                />
-                                <button
-                                  type="button"
-                                  className={own.linkBtn}
-                                  onClick={() => handleSaveSku(user)}
-                                >
-                                  Salvar
-                                </button>
-                                <button
-                                  type="button"
-                                  className={own.linkBtnMuted}
-                                  onClick={() => setEditingSkuId(null)}
-                                >
-                                  Cancelar
-                                </button>
-                              </span>
-                            ) : (
-                              <span className={own.skuLine}>
-                                Próximo SKU: <b>{user.nextSku ?? "100001 (padrão)"}</b>
-                                <button
-                                  type="button"
-                                  className={own.linkBtn}
-                                  onClick={() => startEditSku(user)}
-                                >
-                                  Alterar
-                                </button>
-                              </span>
-                            )}
+                            <span className={own.storeLine}>
+                              {user.isAdmin
+                                ? "Lojas: todas (administrador)"
+                                : user.storeNames?.length
+                                  ? `Lojas: ${user.storeNames.join(", ")}`
+                                  : "Sem loja ainda"}
+                            </span>
 
                             <span className={own.lastSeen}>
                               Último acesso: {formatDate(user.lastSignInAt)}

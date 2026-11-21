@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
-import { getCurrentUserId } from "@/lib/auth-users";
+import { getStoreContext } from "@/lib/stores";
 import { normalizeNumericSku } from "@/lib/sku";
 
 export const runtime = "nodejs";
@@ -10,10 +10,9 @@ export const dynamic = "force-dynamic";
 // Se for maior que o contador da pessoa, o contador pula para ele.
 export async function POST(request: NextRequest) {
   try {
-    const ownerId = await getCurrentUserId();
-    if (!ownerId) {
-      return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
-    }
+    const { ctx, response } = await getStoreContext();
+    if (response) return response;
+    const ownerId = ctx.store.id;
 
     const body = (await request.json()) as { sku?: string | number };
     const sku = body.sku == null ? null : normalizeNumericSku(body.sku);

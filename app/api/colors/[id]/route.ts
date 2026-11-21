@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
-import { getCurrentUserId } from "@/lib/auth-users";
+import { getStoreContext } from "@/lib/stores";
 
 function toSlug(value: string): string {
   return value
@@ -14,10 +14,9 @@ function toSlug(value: string): string {
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ownerId = await getCurrentUserId();
-    if (!ownerId) {
-      return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
-    }
+    const { ctx, response } = await getStoreContext();
+    if (response) return response;
+    const storeId = ctx.store.id;
     const body = (await request.json()) as { name?: string; slug?: string };
     const name = (body.name || "").trim();
     const slugInput = (body.slug || "").trim();
@@ -35,14 +34,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       .from("colors")
       .update(payload)
       .eq("id", params.id)
-      .eq("owner_id", ownerId)
+      .eq("store_id", storeId)
       .select("id,name,slug,image_url")
       .maybeSingle();
 
     if (error) {
       const duplicate = /duplicate|unique/i.test(error.message);
       return NextResponse.json(
-        { error: duplicate ? "Você já tem uma cor com esse slug." : error.message },
+        { error: duplicate ? "Esta loja já tem uma cor com esse slug." : error.message },
         { status: 400 }
       );
     }
@@ -59,17 +58,16 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
 export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const ownerId = await getCurrentUserId();
-    if (!ownerId) {
-      return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
-    }
+    const { ctx, response } = await getStoreContext();
+    if (response) return response;
+    const storeId = ctx.store.id;
 
     const supabase = getSupabaseServerClient();
     const { data, error } = await supabase
       .from("colors")
       .delete()
       .eq("id", params.id)
-      .eq("owner_id", ownerId)
+      .eq("store_id", storeId)
       .select("id");
 
     if (error) {

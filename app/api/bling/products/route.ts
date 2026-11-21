@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUserId } from "@/lib/auth-users";
+import { getStoreContext } from "@/lib/stores";
 import { BlingError, blingRequest } from "@/lib/bling";
 import { buildBlingProduct, type ProductColor } from "@/lib/bling-product";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
@@ -29,10 +29,12 @@ function fail(message: string, status = 400, details: string[] = []) {
 
 // Cria o produto (pai + variações) direto no Bling de quem está logado.
 export async function POST(request: NextRequest) {
-  const ownerId = await getCurrentUserId();
-  if (!ownerId) return fail("Não autorizado.", 401);
-
   try {
+    // Envia para o Bling da loja ativa, usando as cores dessa loja.
+    const { ctx, response } = await getStoreContext();
+    if (response) return response;
+    const ownerId = ctx.store.id;
+
     const body = (await request.json()) as Body;
     const name = (body.name || "").trim();
     const skuBase = (body.skuBase || "").trim();
@@ -52,7 +54,7 @@ export async function POST(request: NextRequest) {
     const { data: colors, error } = await getSupabaseServerClient()
       .from("colors")
       .select("id,name,slug,image_url")
-      .eq("owner_id", ownerId)
+      .eq("store_id", ownerId)
       .in("id", colorIds);
 
     if (error) return fail(error.message, 500);
