@@ -67,6 +67,11 @@ export default function AdminPage() {
   const [uploadingColorId, setUploadingColorId] = useState<string | null>(null);
   const [isLoadingColors, setIsLoadingColors] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [blingStatus, setBlingStatus] = useState<{
+    configured: boolean;
+    connected: boolean;
+    connectedAt: string | null;
+  } | null>(null);
 
   const didAutoSkuRef = useRef(false);
 
@@ -92,6 +97,66 @@ export default function AdminPage() {
       .catch((err) => setError(err.message))
       .finally(() => setIsLoadingColors(false));
   }, []);
+
+  async function loadBlingStatus() {
+    try {
+      const res = await fetch("/api/bling/status", { cache: "no-store" });
+      const json = await res.json();
+      setBlingStatus({
+        configured: Boolean(json.configured),
+        connected: Boolean(json.connected),
+        connectedAt: json.connectedAt ?? null
+      });
+    } catch {
+      setBlingStatus(null);
+    }
+  }
+
+  // Volta da tela de autorização do Bling (?bling=...)
+  useEffect(() => {
+    loadBlingStatus();
+
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("bling");
+    if (!result) return;
+
+    const messages: Record<string, { ok: boolean; text: string }> = {
+      conectado: { ok: true, text: "Bling conectado! Agora seus produtos podem ir direto para lá." },
+      cancelado: { ok: false, text: "A conexão com o Bling foi cancelada." },
+      "erro-state": {
+        ok: false,
+        text: "Não deu para confirmar a conexão. Abra o sistema pelo endereço oficial e clique em \"Conectar meu Bling\" de novo."
+      },
+      "nao-configurado": {
+        ok: false,
+        text: "As chaves do aplicativo Bling ainda não foram cadastradas na Vercel."
+      },
+      erro: { ok: false, text: "O Bling não completou a conexão. Tente de novo em alguns minutos." }
+    };
+    const message = messages[result] ?? messages.erro;
+    if (message.ok) setSuccess(message.text);
+    else setError(message.text);
+
+    params.delete("bling");
+    const query = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : ""));
+  }, []);
+
+  async function handleBlingDisconnect() {
+    const confirmed = window.confirm(
+      "Desconectar o seu Bling deste sistema? Você pode conectar de novo quando quiser."
+    );
+    if (!confirmed) return;
+    setError(null);
+    const res = await fetch("/api/bling/disconnect", { method: "POST" });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setError(json.error || "Erro ao desconectar o Bling");
+      return;
+    }
+    setSuccess("Bling desconectado.");
+    await loadBlingStatus();
+  }
 
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
@@ -1021,6 +1086,40 @@ export default function AdminPage() {
                   Selecione pelo menos uma cor e um tamanho para ver as variações aqui.
                 </p>
               )}
+
+              {blingStatus?.configured ? (
+                <div className={styles.blingBox}>
+                  {blingStatus.connected ? (
+                    <>
+                      <span className={styles.blingDot} aria-hidden="true" />
+                      <span className={styles.blingText}>
+                        <strong>Bling conectado</strong>
+                        <span>Em breve: enviar o produto direto, sem planilha.</span>
+                      </span>
+                      <button
+                        type="button"
+                        className={styles.blingLink}
+                        onClick={handleBlingDisconnect}
+                      >
+                        Desconectar
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className={styles.blingText}>
+                        <strong>Conecte o seu Bling</strong>
+                        <span>Para enviar produtos direto, sem baixar planilha.</span>
+                      </span>
+                      <a
+                        className={`${styles.btn} ${styles.btnMuted} ${styles.btnSmall}`}
+                        href="/api/bling/connect"
+                      >
+                        Conectar meu Bling
+                      </a>
+                    </>
+                  )}
+                </div>
+              ) : null}
 
               <button
                 className={`${styles.btn} ${styles.btnPrimary} ${styles.btnBig}`}
