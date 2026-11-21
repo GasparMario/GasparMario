@@ -32,14 +32,50 @@ function env(name: string): string {
   return value;
 }
 
+// O app da MG (chaves na Vercel). Só funciona na conta do Bling que criou o app.
 export function isBlingConfigured(): boolean {
   return Boolean(process.env.BLING_CLIENT_ID && process.env.BLING_CLIENT_SECRET);
 }
 
-export function buildAuthorizeUrl(state: string): string {
+export type AppCredentials = { clientId: string; clientSecret: string; ownApp: boolean };
+
+// Chaves do app do Bling que a loja usa: o app PRÓPRIO da loja (criado no
+// Bling dela e cadastrado na página Lojas) ou, se não tiver, o app da MG.
+export async function getAppCredentials(storeId: string): Promise<AppCredentials | null> {
+  const { data } = await getSupabaseServerClient()
+    .from("stores")
+    .select("bling_client_id,bling_client_secret")
+    .eq("id", storeId)
+    .maybeSingle();
+
+  const row = data as { bling_client_id?: string | null; bling_client_secret?: string | null } | null;
+  if (row?.bling_client_id && row?.bling_client_secret) {
+    return { clientId: row.bling_client_id, clientSecret: row.bling_client_secret, ownApp: true };
+  }
+  if (isBlingConfigured()) {
+    return {
+      clientId: env("BLING_CLIENT_ID"),
+      clientSecret: env("BLING_CLIENT_SECRET"),
+      ownApp: false
+    };
+  }
+  return null;
+}
+
+async function requireAppCredentials(storeId: string): Promise<AppCredentials> {
+  const creds = await getAppCredentials(storeId);
+  if (!creds) {
+    throw new BlingError(
+      "Esta loja não tem aplicativo do Bling cadastrado. Cadastre o Client ID e o Client Secret na página Lojas."
+    );
+  }
+  return creds;
+}
+
+export function buildAuthorizeUrl(state: string, clientId: string): string {
   const params = new URLSearchParams({
     response_type: "code",
-    client_id: env("BLING_CLIENT_ID"),
+    client_id: clientId,
     state
   });
   // Opcional: o Bling usa o link de redirecionamento cadastrado no app.
@@ -56,10 +92,8 @@ type TokenResponse = {
   token_validate?: number;
 };
 
-async function postToken(form: Record<string, string>): Promise<TokenResponse> {
-  const basic = Buffer.from(`${env("BLING_CLIENT_ID")}:${env("BLING_CLIENT_SECRET")}`).toString(
-    "base64"
-  );
+async function postToken(creds: AppCredentials, form: Record<string, string>): Promise<TokenResponse> {
+  const basic = Buffer.from(`${creds.clientId}:${creds.clientSecret}`).toString("base64");
 
   const res = await fetch(TOKEN_URL, {
     method: "POST",
@@ -113,7 +147,8 @@ async function saveTokens(ownerId: string, tokens: TokenResponse, isNewConnectio
 }
 
 export async function connectWithCode(ownerId: string, code: string) {
-  const tokens = await postToken({ grant_type: "authorization_code", code });
+  const creds = await requireAppCredentials(ownerId);
+  const tokens = await postToken(creds, { grant_type: "authorization_code", code });
   await saveTokens(ownerId, tokens, true);
 }
 
@@ -161,7 +196,11 @@ async function getAccessToken(ownerId: string): Promise<string> {
   }
 
   try {
-    const tokens = await postToken({ grant_type: "refresh_token", refresh_token: conn.refresh_token });
+    const creds = await requireAppCredentials(ownerId);
+    const tokens = await postToken(creds, {
+      grant_type: "refresh_token",
+      refresh_token: conn.refresh_token
+    });
     await saveTokens(ownerId, tokens, false);
     return tokens.access_token;
   } catch {

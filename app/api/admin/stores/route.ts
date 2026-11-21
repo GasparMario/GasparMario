@@ -22,6 +22,21 @@ export async function GET() {
       getSupabaseServerClient().from("bling_connections").select("owner_id,connected_at")
     ]);
 
+    const apps = await getSupabaseServerClient()
+      .from("stores")
+      .select("id,bling_client_id,bling_client_secret");
+    const ownApps = new Map(
+      (
+        (apps.data ?? []) as {
+          id: string;
+          bling_client_id: string | null;
+          bling_client_secret: string | null;
+        }[]
+      )
+        .filter((a) => a.bling_client_id && a.bling_client_secret)
+        .map((a) => [a.id, String(a.bling_client_id).slice(-4)])
+    );
+
     const connected = new Map(
       ((conns.data ?? []) as { owner_id: string; connected_at: string }[]).map((c) => [
         c.owner_id,
@@ -36,7 +51,9 @@ export async function GET() {
         ...s,
         memberIds: members.get(s.id) ?? [],
         nextSku: skus.get(s.id) ?? null,
-        blingConnectedAt: connected.get(s.id) ?? null
+        blingConnectedAt: connected.get(s.id) ?? null,
+        // Só os 4 últimos caracteres do Client ID; o Secret nunca sai do servidor.
+        ownAppHint: ownApps.get(s.id) ?? null
       }))
     });
   } catch (err) {

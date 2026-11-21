@@ -14,6 +14,7 @@ type StoreRow = {
   memberIds: string[];
   nextSku: string | null;
   blingConnectedAt: string | null;
+  ownAppHint: string | null;
 };
 
 type UserRow = { id: string; name: string; email: string; isAdmin: boolean };
@@ -61,6 +62,10 @@ export default function StoresPage() {
   const [draftName, setDraftName] = useState("");
   const [draftSku, setDraftSku] = useState("");
   const [draftMembers, setDraftMembers] = useState<string[]>([]);
+  const [draftClientId, setDraftClientId] = useState("");
+  const [draftClientSecret, setDraftClientSecret] = useState("");
+  const [draftRemoveApp, setDraftRemoveApp] = useState(false);
+  const [callbackUrl, setCallbackUrl] = useState("");
 
   async function load() {
     const res = await fetch("/api/admin/stores", { cache: "no-store" });
@@ -83,6 +88,8 @@ export default function StoresPage() {
     load()
       .catch((err) => setError(err.message))
       .finally(() => setIsLoading(false));
+
+    setCallbackUrl(`${window.location.origin}/api/bling/callback`);
 
     const params = new URLSearchParams(window.location.search);
     const result = params.get("bling");
@@ -135,13 +142,41 @@ export default function StoresPage() {
     setDraftName(store.name);
     setDraftSku(store.nextSku || "");
     setDraftMembers(store.memberIds);
+    setDraftClientId("");
+    setDraftClientSecret("");
+    setDraftRemoveApp(false);
   }
 
   async function handleSave(store: StoreRow) {
     setError(null);
-    const body: { name?: string; memberIds: string[]; nextSku?: string } = {
+    const body: {
+      name?: string;
+      memberIds: string[];
+      nextSku?: string;
+      blingClientId?: string;
+      blingClientSecret?: string;
+      removeBlingApp?: boolean;
+    } = {
       memberIds: draftMembers
     };
+    const newId = draftClientId.trim();
+    const newSecret = draftClientSecret.trim();
+    if (newId || newSecret) {
+      if (!newId || !newSecret) {
+        setError("Para cadastrar o app do Bling da loja, preencha o Client ID e o Client Secret.");
+        return;
+      }
+      if (
+        store.blingConnectedAt &&
+        !window.confirm("Trocar o app desconecta o Bling desta loja. Depois é só conectar de novo. Continuar?")
+      ) {
+        return;
+      }
+      body.blingClientId = newId;
+      body.blingClientSecret = newSecret;
+    } else if (draftRemoveApp) {
+      body.removeBlingApp = true;
+    }
     if (draftName.trim() !== store.name) body.name = draftName;
     if (draftSku.trim() && draftSku.trim() !== (store.nextSku || "")) {
       if (!/^\d+$/.test(draftSku.trim())) {
@@ -310,7 +345,7 @@ export default function StoresPage() {
                                     Desconectar
                                   </button>
                                 </span>
-                              ) : blingConfigured ? (
+                              ) : store.ownAppHint || blingConfigured ? (
                                 <span className={lojas.ljRowValue}>
                                   <span className={lojas.ljMuted}>Não conectado</span>
                                   <a
@@ -323,6 +358,56 @@ export default function StoresPage() {
                               ) : (
                                 <span className={lojas.ljMuted}>
                                   Chaves do Bling não cadastradas na Vercel
+                                </span>
+                              )}
+                            </div>
+
+                            <div className={lojas.ljRow}>
+                              <span className={lojas.ljRowLabel}>App do Bling</span>
+                              {isEditing ? (
+                                <div className={lojas.ljAppForm}>
+                                  <p className={lojas.ljHelp}>
+                                    Para o Bling de outra empresa, crie um app <b>dentro do Bling desta
+                                    loja</b>: Central de Extensões → Área do integrador → Criar
+                                    aplicativo (Privado), escopos de Produtos, e este link de
+                                    redirecionamento:
+                                    <code className={lojas.ljCode}>{callbackUrl}</code>
+                                  </p>
+                                  <input
+                                    className={styles.input}
+                                    value={draftClientId}
+                                    onChange={(e) => setDraftClientId(e.target.value)}
+                                    placeholder={store.ownAppHint ? `Client ID atual termina em ${store.ownAppHint}` : "Client ID"}
+                                    autoComplete="off"
+                                  />
+                                  <input
+                                    className={styles.input}
+                                    type="password"
+                                    value={draftClientSecret}
+                                    onChange={(e) => setDraftClientSecret(e.target.value)}
+                                    placeholder="Client Secret"
+                                    autoComplete="new-password"
+                                  />
+                                  {store.ownAppHint ? (
+                                    <label className={lojas.ljCheck}>
+                                      <input
+                                        type="checkbox"
+                                        checked={draftRemoveApp}
+                                        onChange={(e) => setDraftRemoveApp(e.target.checked)}
+                                      />
+                                      Remover o app próprio (voltar a usar o app da MG)
+                                    </label>
+                                  ) : null}
+                                </div>
+                              ) : store.ownAppHint ? (
+                                <span className={lojas.ljRowValue}>
+                                  App próprio da loja
+                                  <span className={lojas.ljMuted}>(Client ID …{store.ownAppHint})</span>
+                                </span>
+                              ) : (
+                                <span className={lojas.ljMuted}>
+                                  Usando o app da MG. Se esta loja é de outra empresa, clique em
+                                  Editar e cadastre o app do Bling dela.
                                 </span>
                               )}
                             </div>
@@ -408,7 +493,8 @@ export default function StoresPage() {
                   <div>
                     <h2>Nova loja</h2>
                     <p className={styles.stepHint}>
-                      Depois de criar, clique em Conectar Bling e entre no Bling dessa loja.
+                      Depois de criar, clique em Editar para cadastrar o app do Bling dela e em
+                      Conectar Bling.
                     </p>
                   </div>
                 </div>
