@@ -1,5 +1,6 @@
 "use client";
-import Image from "next/image";
+
+import AppShell from "@/components/app-shell";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -44,11 +45,6 @@ function quoteCsvString(value: string) {
 
 export default function AdminPage() {
   const router = useRouter();
-
-  async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
-    router.push("/login");
-  }
 
   const [colors, setColors] = useState<Color[]>([]);
   const [name, setName] = useState("");
@@ -119,22 +115,6 @@ export default function AdminPage() {
     } catch {
       // sem seletor de loja; o resto da tela segue funcionando
     }
-  }
-
-  async function handleSwitchStore(storeId: string) {
-    if (!storeInfo || storeId === storeInfo.activeId) return;
-    const res = await fetch("/api/stores/active", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ storeId })
-    });
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      setError(json.error || "Não foi possível trocar de loja.");
-      return;
-    }
-    // Recarrega tudo (cores, SKU e Bling) da loja escolhida.
-    window.location.reload();
   }
 
   useEffect(() => {
@@ -844,62 +824,8 @@ export default function AdminPage() {
   const previewLimit = 8;
 
   return (
-    <main className={styles.page}>
-      <header className={styles.topbar}>
-        <div className={styles.topbarInner}>
-          <div className={styles.brand}>
-            <Image
-              src="/Ellos-Escrito-Logo-Preto.png"
-              alt="Ellos"
-              width={260}
-              height={80}
-              className={styles.logo}
-              priority
-            />
-            <span className={styles.brandDivider} aria-hidden="true" />
-            <span className={styles.brandTitle}>Cadastro de Produtos</span>
-          </div>
-
-          <nav className={styles.topbarActions}>
-            {storeInfo && storeInfo.stores.length > 1 ? (
-              <label className={styles.storePicker}>
-                <span>Loja</span>
-                <select
-                  value={storeInfo.activeId}
-                  onChange={(e) => handleSwitchStore(e.target.value)}
-                  aria-label="Loja em que você está trabalhando"
-                >
-                  {storeInfo.stores.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : storeInfo && storeInfo.stores.length === 1 ? (
-              <span className={styles.storeName}>{storeInfo.stores[0].name}</span>
-            ) : null}
-            {isAdmin ? (
-              <>
-                <Link className={`${styles.btn} ${styles.btnGhost}`} href="/lojas">
-                  Lojas
-                </Link>
-                <Link className={`${styles.btn} ${styles.btnGhost}`} href="/usuarios">
-                  Usuários
-                </Link>
-              </>
-            ) : null}
-            <button
-              className={`${styles.btn} ${styles.btnGhost}`}
-              type="button"
-              onClick={handleLogout}
-            >
-              Sair
-            </button>
-          </nav>
-        </div>
-      </header>
-
+    <AppShell active="produtos">
+      <div className={styles.page}>
       <div className={styles.shell}>
         <section className={styles.intro}>
           <h1>Olá! Vamos cadastrar um produto?</h1>
@@ -907,7 +833,7 @@ export default function AdminPage() {
             {activeStoreName ? (
               <>
                 Você está cadastrando na loja <strong className={styles.storeHighlight}>{activeStoreName}</strong>
-                {storeInfo && storeInfo.stores.length > 1 ? " (troque a loja no topo da tela)" : ""}. Escolha
+                {storeInfo && storeInfo.stores.length > 1 ? " (troque a loja no menu)" : ""}. Escolha
                 as cores, preencha os dados e envie para o Bling dessa loja.
               </>
             ) : (
@@ -1342,6 +1268,7 @@ export default function AdminPage() {
           </div>
         ) : null}
       </div>
-    </main>
+    </div>
+    </AppShell>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import AppShell from "@/components/app-shell";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -174,45 +174,11 @@ export default function UsersPage() {
     await loadUsers();
   }
 
-  async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
-    router.push("/login");
-  }
-
   const notAllowed = !isLoading && me && !me.isAdmin;
 
   return (
-    <main className={styles.page}>
-      <header className={styles.topbar}>
-        <div className={styles.topbarInner}>
-          <div className={styles.brand}>
-            <Image
-              src="/Ellos-Escrito-Logo-Preto.png"
-              alt="Ellos"
-              width={260}
-              height={80}
-              className={styles.logo}
-              priority
-            />
-            <span className={styles.brandDivider} aria-hidden="true" />
-            <span className={styles.brandTitle}>Usuários</span>
-          </div>
-
-          <nav className={styles.topbarActions}>
-            <Link className={`${styles.btn} ${styles.btnGhost}`} href="/admin">
-              ← Voltar ao cadastro
-            </Link>
-            <button
-              className={`${styles.btn} ${styles.btnGhost}`}
-              type="button"
-              onClick={handleLogout}
-            >
-              Sair
-            </button>
-          </nav>
-        </div>
-      </header>
-
+    <AppShell active="usuarios">
+      <div className={styles.page}>
       <div className={`${styles.shell} ${own.narrow}`}>
         {notAllowed ? (
           <section className={styles.card}>
@@ -288,7 +254,6 @@ export default function UsersPage() {
                         required
                       />
                     </label>
-
 
                   <div className={styles.label}>
                     Lojas que essa pessoa usa
@@ -442,6 +407,7 @@ export default function UsersPage() {
           </div>
         ) : null}
       </div>
-    </main>
+    </div>
+    </AppShell>
   );
 }
