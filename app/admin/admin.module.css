@@ -66,6 +66,11 @@
   padding: 0 0.4rem;
 }
 
+.storeHighlight {
+  color: #18181b;
+  font-weight: 800;
+}
+
 .inlineLink {
   display: inline-block;
   margin-top: 0.8rem;

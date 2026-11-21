@@ -797,7 +797,7 @@ export default function AdminPage() {
 
     const variations = buildOrderedVariations(data.orderedColors, data.sizes).length;
     const confirmed = window.confirm(
-      `Criar "${data.trimmedProductName}" (SKU ${data.skuBase}) com ${variations} variações no seu Bling?`
+      `Criar "${data.trimmedProductName}" (SKU ${data.skuBase}) com ${variations} variações no Bling da loja ${blingStatus?.storeName || ""}?`
     );
     if (!confirmed) return;
 
@@ -827,7 +827,7 @@ export default function AdminPage() {
       }
 
       setSuccess(
-        `Pronto! "${data.trimmedProductName}" foi criado no seu Bling com ${json.variations} variações (SKU ${data.skuBase}).`
+        `Pronto! "${data.trimmedProductName}" foi criado no Bling da loja ${blingStatus?.storeName || ""} com ${json.variations} variações (SKU ${data.skuBase}).`
       );
       void prepareNextSkuAfterExport(data.skuBase);
     } catch {
@@ -838,6 +838,8 @@ export default function AdminPage() {
   }
 
   const blingConnected = Boolean(blingStatus?.configured && blingStatus.connected);
+  const activeStoreName =
+    storeInfo?.stores.find((s) => s.id === storeInfo.activeId)?.name || blingStatus?.storeName || "";
   const variationCount = previewVariations.length;
   const previewLimit = 8;
 
@@ -902,7 +904,15 @@ export default function AdminPage() {
         <section className={styles.intro}>
           <h1>Olá! Vamos cadastrar um produto?</h1>
           <p>
-            Escolha as cores, preencha os dados e baixe o arquivo pronto para importar no Bling.
+            {activeStoreName ? (
+              <>
+                Você está cadastrando na loja <strong className={styles.storeHighlight}>{activeStoreName}</strong>
+                {storeInfo && storeInfo.stores.length > 1 ? " (troque a loja no topo da tela)" : ""}. Escolha
+                as cores, preencha os dados e envie para o Bling dessa loja.
+              </>
+            ) : (
+              "Escolha as cores, preencha os dados e baixe o arquivo pronto para importar no Bling."
+            )}
           </p>
         </section>
 
@@ -1288,7 +1298,9 @@ export default function AdminPage() {
                   onClick={handleSendToBling}
                   disabled={isSendingBling}
                 >
-                  {isSendingBling ? "Enviando para o Bling…" : "➜ Enviar direto para o Bling"}
+                  {isSendingBling
+                    ? "Enviando para o Bling…"
+                    : `➜ Enviar para o Bling da ${blingStatus?.storeName || "loja"}`}
                 </button>
               ) : null}
 
