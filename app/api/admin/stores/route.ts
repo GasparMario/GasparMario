@@ -37,6 +37,12 @@ export async function GET() {
         .map((a) => [a.id, String(a.bling_client_id).slice(-4)])
     );
 
+    const colorRows = await getSupabaseServerClient().from("colors").select("store_id");
+    const colorCounts = new Map<string, number>();
+    for (const row of (colorRows.data ?? []) as { store_id: string | null }[]) {
+      if (row.store_id) colorCounts.set(row.store_id, (colorCounts.get(row.store_id) ?? 0) + 1);
+    }
+
     const connected = new Map(
       ((conns.data ?? []) as { owner_id: string; connected_at: string }[]).map((c) => [
         c.owner_id,
@@ -52,6 +58,7 @@ export async function GET() {
         memberIds: members.get(s.id) ?? [],
         nextSku: skus.get(s.id) ?? null,
         blingConnectedAt: connected.get(s.id) ?? null,
+        colorCount: colorCounts.get(s.id) ?? 0,
         // Só os 4 últimos caracteres do Client ID; o Secret nunca sai do servidor.
         ownAppHint: ownApps.get(s.id) ?? null
       }))

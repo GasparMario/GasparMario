@@ -134,6 +134,16 @@
   align-items: start;
 }
 
+.ljDeleteBtn {
+  margin-left: auto;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.ljDeleteBtn:hover {
+  background: #fee2e2;
+}
+
 @media (max-width: 640px) {
   .ljRow {
     grid-template-columns: 1fr;
