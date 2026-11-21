@@ -72,6 +72,7 @@ export default function AdminPage() {
     connected: boolean;
     connectedAt: string | null;
   } | null>(null);
+  const [isSendingBling, setIsSendingBling] = useState(false);
 
   const didAutoSkuRef = useRef(false);
 
@@ -723,6 +724,56 @@ export default function AdminPage() {
     void prepareNextSkuAfterExport(skuBase);
   }
 
+  async function handleSendToBling() {
+    setError(null);
+    setSuccess(null);
+
+    const data = getValidatedExportData();
+    if (!data) return;
+
+    const variations = buildOrderedVariations(data.orderedColors, data.sizes).length;
+    const confirmed = window.confirm(
+      `Criar "${data.trimmedProductName}" (SKU ${data.skuBase}) com ${variations} variações no seu Bling?`
+    );
+    if (!confirmed) return;
+
+    setIsSendingBling(true);
+    try {
+      const res = await fetch("/api/bling/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: data.trimmedProductName,
+          skuBase: data.skuBase,
+          price: priceInput,
+          weight: weightInput,
+          sizes: data.sizes,
+          colorIds: data.orderedColors.map((c) => c.id)
+        })
+      });
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        const details: string[] = Array.isArray(json.details) ? json.details : [];
+        setError(
+          [json.error || "O Bling não aceitou o produto.", ...details.slice(0, 4)].join(" • ")
+        );
+        if (res.status === 409 && /conect/i.test(json.error || "")) await loadBlingStatus();
+        return;
+      }
+
+      setSuccess(
+        `Pronto! "${data.trimmedProductName}" foi criado no seu Bling com ${json.variations} variações (SKU ${data.skuBase}).`
+      );
+      void prepareNextSkuAfterExport(data.skuBase);
+    } catch {
+      setError("Não foi possível falar com o Bling. Tente de novo ou use o arquivo (plano B).");
+    } finally {
+      setIsSendingBling(false);
+    }
+  }
+
+  const blingConnected = Boolean(blingStatus?.configured && blingStatus.connected);
   const variationCount = previewVariations.length;
   const previewLimit = 8;
 
@@ -1094,7 +1145,7 @@ export default function AdminPage() {
                       <span className={styles.blingDot} aria-hidden="true" />
                       <span className={styles.blingText}>
                         <strong>Bling conectado</strong>
-                        <span>Em breve: enviar o produto direto, sem planilha.</span>
+                        <span>Os produtos vão direto para a sua conta.</span>
                       </span>
                       <button
                         type="button"
@@ -1121,15 +1172,28 @@ export default function AdminPage() {
                 </div>
               ) : null}
 
+              {blingConnected ? (
+                <button
+                  className={`${styles.btn} ${styles.btnPrimary} ${styles.btnBig}`}
+                  type="button"
+                  onClick={handleSendToBling}
+                  disabled={isSendingBling}
+                >
+                  {isSendingBling ? "Enviando para o Bling…" : "➜ Enviar direto para o Bling"}
+                </button>
+              ) : null}
+
               <button
-                className={`${styles.btn} ${styles.btnPrimary} ${styles.btnBig}`}
+                className={`${styles.btn} ${blingConnected ? styles.btnMuted : styles.btnPrimary} ${
+                  blingConnected ? styles.btnSecondaryBig : styles.btnBig
+                }`}
                 type="button"
                 onClick={handleExportBling}
               >
-                ⬇ Baixar arquivo para o Bling
+                {blingConnected ? "⬇ Baixar arquivo (plano B)" : "⬇ Baixar arquivo para o Bling"}
               </button>
               <p className={styles.fieldHint}>
-                Depois de baixar, o próximo SKU já é gerado sozinho. SKU de cada variação = SKU do
+                Depois de enviar ou baixar, o próximo SKU já é gerado sozinho. SKU de cada variação = SKU do
                 pai + 2 dígitos (ex: 100001 → 10000101).
               </p>
             </section>
