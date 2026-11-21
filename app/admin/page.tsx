@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./admin.module.css";
-import { buildOrderedVariations } from "@/lib/sku";
+import { SKU_PATTERN, buildOrderedVariations, isValidParentSku, normalizeSkuInput } from "@/lib/sku";
 
 type Color = {
   id: string;
@@ -383,7 +383,7 @@ export default function AdminPage() {
 
   const previewVariations = useMemo(() => {
     const ordered = [...selectedColors].sort((a, b) => a.slug.localeCompare(b.slug));
-    const base = parentSku.trim();
+    const base = normalizeSkuInput(parentSku);
     return buildOrderedVariations(ordered, previewSizes).map(({ color, size }, index) => ({
       color,
       size,
@@ -426,7 +426,7 @@ export default function AdminPage() {
         throw new Error(json.error || "Erro ao gerar próximo SKU");
       }
 
-      if (!json.sku || !/^\d+$/.test(String(json.sku))) {
+      if (!json.sku || !SKU_PATTERN.test(String(json.sku))) {
         throw new Error("API retornou SKU inválido");
       }
 
@@ -494,15 +494,15 @@ export default function AdminPage() {
       return null;
     }
 
-    const skuBase = parentSku.trim();
+    const skuBase = normalizeSkuInput(parentSku);
 
     if (!skuBase) {
       setError("Informe o SKU do pai ou aguarde o SKU automático.");
       return null;
     }
 
-    if (!/^\d+$/.test(skuBase)) {
-      setError("SKU do pai deve ser numérico (ex: 100001)");
+    if (!isValidParentSku(skuBase)) {
+      setError("SKU do pai inválido. Use só números, com até 5 letras na frente (ex: 100001 ou RES100001).");
       return null;
     }
 
@@ -1131,9 +1131,9 @@ export default function AdminPage() {
                     <input
                       className={styles.input}
                       value={parentSku}
-                      onChange={(e) => setParentSku(e.target.value)}
+                      onChange={(e) => setParentSku(e.target.value.toUpperCase())}
                       placeholder="Gerado automaticamente"
-                      inputMode="numeric"
+                      autoCapitalize="characters"
                     />
                     <button
                       className={`${styles.btn} ${styles.btnMuted}`}
@@ -1315,7 +1315,8 @@ export default function AdminPage() {
               </button>
               <p className={styles.fieldHint}>
                 Depois de enviar ou baixar, o próximo SKU já é gerado sozinho. SKU de cada variação = SKU do
-                pai + 2 dígitos (ex: 100001 → 10000101).
+                pai + 2 dígitos (ex: {normalizeSkuInput(parentSku) || "100001"} →{" "}
+                {normalizeSkuInput(parentSku) || "100001"}01).
               </p>
             </section>
           </div>

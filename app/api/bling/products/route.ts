@@ -3,6 +3,7 @@ import { getStoreContext } from "@/lib/stores";
 import { BlingError, blingRequest } from "@/lib/bling";
 import { buildBlingProduct, type ProductColor } from "@/lib/bling-product";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
+import { isValidParentSku, normalizeSkuInput } from "@/lib/sku";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,14 +38,16 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as Body;
     const name = (body.name || "").trim();
-    const skuBase = (body.skuBase || "").trim();
+    const skuBase = normalizeSkuInput(body.skuBase || "");
     const sizes = (body.sizes || []).map((s) => String(s).trim()).filter(Boolean);
     const colorIds = Array.from(new Set(body.colorIds || []));
     const price = toNumber(body.price);
     const weight = toNumber(body.weight);
 
     if (!name) return fail("Informe o nome do produto.");
-    if (!/^\d+$/.test(skuBase)) return fail("SKU do pai deve ser numérico (ex: 100001).");
+    if (!isValidParentSku(skuBase)) {
+      return fail("SKU do pai inválido. Use só números, com até 5 letras na frente (ex: 100001 ou RES100001).");
+    }
     if (sizes.length === 0) return fail("Informe pelo menos um tamanho.");
     if (colorIds.length === 0) return fail("Selecione pelo menos uma cor.");
     if (price === null || Number.isNaN(price)) return fail("Informe um preço válido (ex: 79,90).");

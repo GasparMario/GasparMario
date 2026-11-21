@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import styles from "../admin/admin.module.css";
 import own from "../usuarios/usuarios.module.css";
 import lojas from "./lojas.module.css";
+import { normalizePrefix, suggestPrefix } from "@/lib/sku";
 
 type StoreRow = {
   id: string;
@@ -16,6 +17,7 @@ type StoreRow = {
   blingConnectedAt: string | null;
   ownAppHint: string | null;
   colorCount: number;
+  skuPrefix: string;
 };
 
 type UserRow = { id: string; name: string; email: string; isAdmin: boolean };
@@ -57,6 +59,7 @@ export default function StoresPage() {
   const [newName, setNewName] = useState("");
   const [newStartSku, setNewStartSku] = useState("");
   const [newMembers, setNewMembers] = useState<string[]>([]);
+  const [newPrefix, setNewPrefix] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -66,6 +69,7 @@ export default function StoresPage() {
   const [draftClientId, setDraftClientId] = useState("");
   const [draftClientSecret, setDraftClientSecret] = useState("");
   const [draftRemoveApp, setDraftRemoveApp] = useState(false);
+  const [draftPrefix, setDraftPrefix] = useState("");
   const [callbackUrl, setCallbackUrl] = useState("");
 
   async function load() {
@@ -121,7 +125,12 @@ export default function StoresPage() {
       const res = await fetch("/api/admin/stores", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName, startSku: newStartSku, memberIds: newMembers })
+        body: JSON.stringify({
+          name: newName,
+          startSku: newStartSku,
+          memberIds: newMembers,
+          skuPrefix: newPrefix
+        })
       });
       const json = await res.json();
       if (!res.ok) {
@@ -132,6 +141,7 @@ export default function StoresPage() {
       setNewName("");
       setNewStartSku("");
       setNewMembers([]);
+      setNewPrefix("");
       await load();
     } finally {
       setIsCreating(false);
@@ -146,6 +156,7 @@ export default function StoresPage() {
     setDraftClientId("");
     setDraftClientSecret("");
     setDraftRemoveApp(false);
+    setDraftPrefix(store.skuPrefix || "");
   }
 
   async function handleSave(store: StoreRow) {
@@ -157,9 +168,18 @@ export default function StoresPage() {
       blingClientId?: string;
       blingClientSecret?: string;
       removeBlingApp?: boolean;
+      skuPrefix?: string;
     } = {
       memberIds: draftMembers
     };
+    const prefix = normalizePrefix(draftPrefix);
+    if (prefix !== (store.skuPrefix || "")) {
+      if (prefix && (prefix.length < 2 || prefix.length > 5)) {
+        setError("O prefixo do SKU precisa ter de 2 a 5 letras (ex: RES).");
+        return;
+      }
+      body.skuPrefix = prefix;
+    }
     const newId = draftClientId.trim();
     const newSecret = draftClientSecret.trim();
     if (newId || newSecret) {
@@ -179,12 +199,13 @@ export default function StoresPage() {
       body.removeBlingApp = true;
     }
     if (draftName.trim() !== store.name) body.name = draftName;
-    if (draftSku.trim() && draftSku.trim() !== (store.nextSku || "")) {
-      if (!/^\d+$/.test(draftSku.trim())) {
-        setError("O SKU precisa ser só números (ex: 100001).");
+    const skuNumber = draftSku.trim().toUpperCase().replace(/^[A-Z]+/, "");
+    if (skuNumber && skuNumber !== (store.nextSku || "")) {
+      if (!/^\d+$/.test(skuNumber)) {
+        setError("O próximo SKU precisa ser um número (ex: 100001).");
         return;
       }
-      body.nextSku = draftSku.trim();
+      body.nextSku = skuNumber;
     }
 
     const res = await fetch(`/api/admin/stores/${store.id}`, {
@@ -439,6 +460,39 @@ export default function StoresPage() {
                             </div>
 
                             <div className={lojas.ljRow}>
+                              <span className={lojas.ljRowLabel}>Prefixo do SKU</span>
+                              {isEditing ? (
+                                <span className={lojas.ljRowValue}>
+                                  <input
+                                    className={`${styles.input} ${lojas.ljPrefixInput}`}
+                                    value={draftPrefix}
+                                    onChange={(e) => setDraftPrefix(normalizePrefix(e.target.value).slice(0, 5))}
+                                    placeholder="Sem prefixo"
+                                    aria-label="Prefixo do SKU"
+                                  />
+                                  {!draftPrefix ? (
+                                    <button
+                                      type="button"
+                                      className={styles.blingLink}
+                                      onClick={() => setDraftPrefix(suggestPrefix(draftName || store.name))}
+                                    >
+                                      Usar {suggestPrefix(draftName || store.name)}
+                                    </button>
+                                  ) : null}
+                                  <span className={lojas.ljMuted}>
+                                    {draftPrefix
+                                      ? `Novos SKUs: ${draftPrefix}${store.nextSku ?? "100001"}`
+                                      : "Opcional: 2 a 5 letras na frente do SKU"}
+                                  </span>
+                                </span>
+                              ) : store.skuPrefix ? (
+                                <span className={lojas.ljMono}>{store.skuPrefix}</span>
+                              ) : (
+                                <span className={lojas.ljMuted}>Sem prefixo (SKU só com números)</span>
+                              )}
+                            </div>
+
+                            <div className={lojas.ljRow}>
                               <span className={lojas.ljRowLabel}>Próximo SKU</span>
                               {isEditing ? (
                                 <input
@@ -449,7 +503,11 @@ export default function StoresPage() {
                                   inputMode="numeric"
                                 />
                               ) : (
-                                <span className={lojas.ljMono}>{store.nextSku ?? "100001 (padrão)"}</span>
+                                <span className={lojas.ljMono}>
+                                  {store.skuPrefix}
+                                  {store.nextSku ?? "100001"}
+                                  {store.nextSku ? "" : " (padrão)"}
+                                </span>
                               )}
                             </div>
 
@@ -557,6 +615,34 @@ export default function StoresPage() {
                       />
                     </label>
                   </div>
+
+                  <label className={styles.label}>
+                    <span>
+                      Prefixo do SKU <span className={styles.optional}>(opcional, 2 a 5 letras)</span>
+                    </span>
+                    <span className={lojas.ljRowValue}>
+                      <input
+                        className={`${styles.input} ${lojas.ljPrefixInput}`}
+                        value={newPrefix}
+                        onChange={(e) => setNewPrefix(normalizePrefix(e.target.value).slice(0, 5))}
+                        placeholder={newName ? suggestPrefix(newName) : "Ex: RES"}
+                      />
+                      {!newPrefix && newName && suggestPrefix(newName).length >= 2 ? (
+                        <button
+                          type="button"
+                          className={styles.blingLink}
+                          onClick={() => setNewPrefix(suggestPrefix(newName))}
+                        >
+                          Usar {suggestPrefix(newName)}
+                        </button>
+                      ) : null}
+                      <span className={lojas.ljMuted}>
+                        {newPrefix
+                          ? `SKUs desta loja: ${newPrefix}${newStartSku || "100001"}`
+                          : "Sem prefixo, o SKU fica só com números"}
+                      </span>
+                    </span>
+                  </label>
 
                   <div className={styles.label}>
                     Quem usa esta loja

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { DEFAULT_START_SKU, isFirstAppUser } from "@/lib/auth-users";
-import { getStoreContext } from "@/lib/stores";
+import { getStoreContext, getStorePrefix } from "@/lib/stores";
 import { extractNextSkuRpcValue, normalizeNumericSku, type NextSkuRpcResponse } from "@/lib/sku";
 
 export const runtime = "nodejs";
@@ -26,6 +26,7 @@ export async function GET() {
     const { ctx, response } = await getStoreContext();
     if (response) return response;
     const ownerId = ctx.store.id;
+    const prefix = await getStorePrefix(ownerId);
 
     const supabase = getSupabaseServerClient();
 
@@ -40,7 +41,7 @@ export async function GET() {
     if (next != null) {
       const sku = normalizeNumericSku(next as number | string);
       if (!sku) return fail("O contador de SKU devolveu um valor inválido.");
-      return NextResponse.json({ sku }, { headers: NO_STORE });
+      return NextResponse.json({ sku: `${prefix}${sku}`, number: sku, prefix }, { headers: NO_STORE });
     }
 
     let seed: string | null = String(DEFAULT_START_SKU);
@@ -66,7 +67,7 @@ export async function GET() {
 
     const sku = normalizeNumericSku(started as number | string);
     if (!sku) return fail("O contador de SKU devolveu um valor inválido.");
-    return NextResponse.json({ sku }, { headers: NO_STORE });
+    return NextResponse.json({ sku: `${prefix}${sku}`, number: sku, prefix }, { headers: NO_STORE });
   } catch (err) {
     return fail("Erro interno ao gerar SKU.", err instanceof Error ? err.message : "Erro desconhecido");
   }
