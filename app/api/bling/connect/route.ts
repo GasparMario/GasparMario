@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentAppUser } from "@/lib/auth-users";
-import { buildAuthorizeUrl, isBlingConfigured } from "@/lib/bling";
+import { buildAuthorizeUrl, getAppCredentials } from "@/lib/bling";
 import { listAllStores } from "@/lib/stores";
 
 export const runtime = "nodejs";
@@ -20,16 +20,18 @@ export async function GET(request: NextRequest) {
   const user = await getCurrentAppUser();
   if (!user) return NextResponse.redirect(new URL("/login", request.url));
   if (!user.isAdmin) return goBack("so-admin");
-  if (!isBlingConfigured()) return goBack("nao-configurado");
-
   const storeId = request.nextUrl.searchParams.get("store") || "";
   const stores = await listAllStores();
   if (!stores.some((s) => s.id === storeId)) return goBack("loja-invalida");
 
+  // App próprio da loja, ou o app da MG.
+  const creds = await getAppCredentials(storeId);
+  if (!creds) return goBack("nao-configurado");
+
   const random = crypto.getRandomValues(new Uint8Array(16));
   const state = Array.from(random, (b) => b.toString(16).padStart(2, "0")).join("");
 
-  const response = NextResponse.redirect(buildAuthorizeUrl(state));
+  const response = NextResponse.redirect(buildAuthorizeUrl(state, creds.clientId));
   response.cookies.set(STATE_COOKIE, `${state}|${storeId}|${back}`, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getConnection, isBlingConfigured } from "@/lib/bling";
+import { getAppCredentials, getConnection } from "@/lib/bling";
 import { getStoreContext } from "@/lib/stores";
 
 export const runtime = "nodejs";
@@ -12,7 +12,7 @@ export async function GET() {
 
   const base = { storeId: ctx.store.id, storeName: ctx.store.name, isAdmin: ctx.user.isAdmin };
 
-  if (!isBlingConfigured()) {
+  if (!(await getAppCredentials(ctx.store.id))) {
     return NextResponse.json({ ...base, configured: false, connected: false });
   }
 

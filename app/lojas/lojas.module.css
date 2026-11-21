@@ -105,6 +105,35 @@
   text-decoration: none;
 }
 
+.ljAppForm {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ljHelp {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #52525b;
+}
+
+.ljCode {
+  display: block;
+  margin-top: 0.3rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 0.5rem;
+  background: #f4f4f5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  color: #18181b;
+  word-break: break-all;
+  user-select: all;
+}
+
+.ljRow {
+  align-items: start;
+}
+
 @media (max-width: 640px) {
   .ljRow {
     grid-template-columns: 1fr;
