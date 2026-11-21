@@ -1,0 +1,231 @@
+.asShell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.asSidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--sidebar);
+}
+
+.asBrand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 1.35rem 1.5rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.asLogo {
+  width: auto;
+  height: 22px;
+  filter: invert(1);
+}
+
+.asBrandSub {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding-left: 0.7rem;
+  border-left: 1px solid var(--border-strong);
+}
+
+.asNav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1.1rem 1rem;
+  overflow-y: auto;
+}
+
+.asSection {
+  margin: 0.6rem 0.75rem 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.asItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.6rem;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.asItem svg,
+.asStoreBtn svg,
+.asLogoutBtn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.asItem:hover {
+  background: var(--surface-2);
+}
+
+.asItemActive,
+.asItemActive:hover {
+  background: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(61, 90, 241, 0.35);
+}
+
+.asBottom {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem;
+}
+
+.asStoreBtn,
+.asLogoutBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.7rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.asLogoutBtn {
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.asLogoutBtn:hover {
+  background: var(--surface-2);
+  border-color: var(--text-faint);
+}
+
+.asStoreText {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+
+.asStoreText small {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.asStoreText strong {
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asStoreText select {
+  width: 100%;
+  margin-left: -0.15rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.asStoreText select:focus {
+  outline: none;
+}
+
+.asStoreText option {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.asFooter {
+  margin: 0;
+  padding: 0.9rem 1rem 1.1rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-faint);
+}
+
+.asMain {
+  min-width: 0;
+}
+
+/* Celular / tablet: o menu vira uma barra no topo */
+@media (max-width: 900px) {
+  .asShell {
+    grid-template-columns: 1fr;
+  }
+
+  .asSidebar {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .asBrand {
+    border-bottom: none;
+    padding: 0.9rem 1rem;
+  }
+
+  .asNav {
+    flex: 1 1 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0 0.75rem 0.75rem;
+    order: 3;
+  }
+
+  .asItem {
+    padding: 0.55rem 0.8rem;
+  }
+
+  .asSection,
+  .asFooter {
+    display: none;
+  }
+
+  .asBottom {
+    margin-left: auto;
+    grid-auto-flow: column;
+    padding: 0.6rem 1rem;
+  }
+
+  .asStoreBtn,
+  .asLogoutBtn {
+    padding: 0.5rem 0.7rem;
+  }
+}

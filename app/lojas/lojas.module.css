@@ -4,7 +4,7 @@
 }
 
 .ljStore {
-  border: 1px solid #ebe9e4;
+  border: 1px solid var(--border);
   border-radius: 1rem;
   padding: 1rem 1.1rem;
   display: grid;
@@ -40,7 +40,7 @@
 .ljRowLabel {
   font-size: 0.78rem;
   font-weight: 700;
-  color: #71717a;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -53,7 +53,7 @@
 }
 
 .ljMuted {
-  color: #a1a1aa;
+  color: var(--text-faint);
 }
 
 .ljMono {
@@ -69,7 +69,7 @@
 .ljChip {
   font-size: 0.8rem;
   font-weight: 650;
-  background: #f4f4f5;
+  background: var(--surface-2);
   border-radius: 999px;
   padding: 0.2rem 0.65rem;
 }
@@ -90,13 +90,13 @@
 }
 
 .ljCheck input {
-  accent-color: #18181b;
+  accent-color: var(--primary);
 }
 
 .ljCheck em {
   font-style: normal;
   font-size: 0.74rem;
-  color: #a1a1aa;
+  color: var(--text-faint);
 }
 
 .ljLinkBtn {
@@ -114,7 +114,7 @@
   margin: 0;
   font-size: 0.8rem;
   line-height: 1.5;
-  color: #52525b;
+  color: var(--text-muted);
 }
 
 .ljCode {
@@ -122,10 +122,10 @@
   margin-top: 0.3rem;
   padding: 0.35rem 0.55rem;
   border-radius: 0.5rem;
-  background: #f4f4f5;
+  background: var(--surface-2);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.76rem;
-  color: #18181b;
+  color: var(--text);
   word-break: break-all;
   user-select: all;
 }
@@ -143,12 +143,12 @@
 
 .ljDeleteBtn {
   margin-left: auto;
-  background: #fef2f2;
-  color: #b91c1c;
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .ljDeleteBtn:hover {
-  background: #fee2e2;
+  background: var(--danger-border);
 }
 
 @media (max-width: 640px) {
