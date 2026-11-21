@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deleteAppUser, listAppUsers, parseSku, setNextSku, setUserAdmin } from "@/lib/auth-users";
+import { deleteAppUser, listAppUsers, setUserAdmin } from "@/lib/auth-users";
+import { removeUserFromAllStores } from "@/lib/stores";
 import { requireAdmin } from "@/lib/require-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Alterar um usuário: tornar/tirar administrador e/ou definir o próximo SKU.
+// Alterar um usuário: tornar/tirar administrador.
+// (Lojas de cada pessoa e próximo SKU ficam na página Lojas.)
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { admin, response } = await requireAdmin();
     if (response) return response;
 
-    const body = (await request.json()) as { isAdmin?: boolean; nextSku?: string | number };
+    const body = (await request.json()) as { isAdmin?: boolean };
     const users = await listAppUsers();
     const target = users.find((u) => u.id === params.id);
 
@@ -33,17 +35,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         );
       }
       await setUserAdmin(target.id, body.isAdmin);
-    }
-
-    if (body.nextSku != null) {
-      const nextSku = parseSku(body.nextSku);
-      if (!nextSku) {
-        return NextResponse.json(
-          { error: "O SKU precisa ser só números (ex: 100001)." },
-          { status: 400 }
-        );
-      }
-      await setNextSku(target.id, nextSku);
     }
 
     return NextResponse.json({ ok: true });
@@ -77,6 +68,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     }
 
     await deleteAppUser(params.id);
+    await removeUserFromAllStores(params.id);
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json(

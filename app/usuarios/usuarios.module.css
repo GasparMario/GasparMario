@@ -167,6 +167,35 @@
   font-size: 0.8rem;
 }
 
+.storeChecks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  font-weight: 500;
+}
+
+.storeCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+
+.storeCheck input {
+  accent-color: #18181b;
+}
+
+.userInfo .storeLine {
+  font-size: 0.8rem;
+  color: #3f3f46;
+}
+
+.inlineLink {
+  color: inherit;
+  font-weight: 700;
+}
+
 .backLink {
   display: inline-block;
   margin-top: 0.8rem;

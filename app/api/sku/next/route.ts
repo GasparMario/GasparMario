@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
-import { DEFAULT_START_SKU, getCurrentUserId, isFirstAppUser } from "@/lib/auth-users";
+import { DEFAULT_START_SKU, isFirstAppUser } from "@/lib/auth-users";
+import { getStoreContext } from "@/lib/stores";
 import { extractNextSkuRpcValue, normalizeNumericSku, type NextSkuRpcResponse } from "@/lib/sku";
 
 export const runtime = "nodejs";
@@ -13,16 +14,18 @@ function fail(message: string, details?: string, status = 500) {
   return NextResponse.json({ error: message, details }, { status, headers: NO_STORE });
 }
 
-// Cada pessoa tem o seu próprio contador de SKU (tabela sku_counters).
+// Cada LOJA tem o seu próprio contador de SKU (tabela user_sku_counters,
+// coluna owner_id = código da loja).
 // - Já tem contador: soma 1 e devolve.
-// - Primeiro usuário (Mario) sem contador: continua de onde o contador antigo
-//   (função next_sku do Supabase) parou.
-// - Outras pessoas sem contador: começa em 100001 (o administrador pode
-//   ajustar o próximo SKU de cada pessoa na página Usuários).
+// - Loja do primeiro usuário (Mario) sem contador: continua de onde o
+//   contador antigo (função next_sku do Supabase) parou.
+// - Outras lojas sem contador: começa em 100001 (o administrador ajusta
+//   o próximo SKU de cada loja na página Lojas).
 export async function GET() {
   try {
-    const ownerId = await getCurrentUserId();
-    if (!ownerId) return fail("Não autorizado.", undefined, 401);
+    const { ctx, response } = await getStoreContext();
+    if (response) return response;
+    const ownerId = ctx.store.id;
 
     const supabase = getSupabaseServerClient();
 

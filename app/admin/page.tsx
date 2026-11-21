@@ -71,8 +71,16 @@ export default function AdminPage() {
     configured: boolean;
     connected: boolean;
     connectedAt: string | null;
+    storeId: string;
+    storeName: string;
+    isAdmin: boolean;
   } | null>(null);
   const [isSendingBling, setIsSendingBling] = useState(false);
+  const [storeInfo, setStoreInfo] = useState<{
+    stores: { id: string; name: string }[];
+    activeId: string;
+  } | null>(null);
+  const [noStoreMessage, setNoStoreMessage] = useState<string | null>(null);
 
   const didAutoSkuRef = useRef(false);
 
@@ -86,6 +94,12 @@ export default function AdminPage() {
 
     const json = await res.json();
 
+    if (res.status === 403 && json.noStore) {
+      setNoStoreMessage(json.error);
+      setColors([]);
+      return;
+    }
+
     if (!res.ok) {
       throw new Error(json.error || "Erro ao listar cores");
     }
@@ -93,7 +107,38 @@ export default function AdminPage() {
     setColors(json.colors);
   }
 
+  async function loadStores() {
+    try {
+      const res = await fetch("/api/stores", { cache: "no-store" });
+      const json = await res.json();
+      if (res.status === 403 && json.noStore) {
+        setNoStoreMessage(json.error);
+        return;
+      }
+      if (res.ok) setStoreInfo({ stores: json.stores, activeId: json.activeId });
+    } catch {
+      // sem seletor de loja; o resto da tela segue funcionando
+    }
+  }
+
+  async function handleSwitchStore(storeId: string) {
+    if (!storeInfo || storeId === storeInfo.activeId) return;
+    const res = await fetch("/api/stores/active", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storeId })
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setError(json.error || "Não foi possível trocar de loja.");
+      return;
+    }
+    // Recarrega tudo (cores, SKU e Bling) da loja escolhida.
+    window.location.reload();
+  }
+
   useEffect(() => {
+    loadStores();
     loadColors()
       .catch((err) => setError(err.message))
       .finally(() => setIsLoadingColors(false));
@@ -103,10 +148,17 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/bling/status", { cache: "no-store" });
       const json = await res.json();
+      if (!res.ok && !json.storeId) {
+        setBlingStatus(null);
+        return;
+      }
       setBlingStatus({
         configured: Boolean(json.configured),
         connected: Boolean(json.connected),
-        connectedAt: json.connectedAt ?? null
+        connectedAt: json.connectedAt ?? null,
+        storeId: String(json.storeId),
+        storeName: String(json.storeName || ""),
+        isAdmin: Boolean(json.isAdmin)
       });
     } catch {
       setBlingStatus(null);
@@ -132,6 +184,8 @@ export default function AdminPage() {
         ok: false,
         text: "As chaves do aplicativo Bling ainda não foram cadastradas na Vercel."
       },
+      "so-admin": { ok: false, text: "Só administradores podem conectar o Bling de uma loja." },
+      "loja-invalida": { ok: false, text: "Loja não encontrada. Atualize a página e tente de novo." },
       erro: { ok: false, text: "O Bling não completou a conexão. Tente de novo em alguns minutos." }
     };
     const message = messages[result] ?? messages.erro;
@@ -144,12 +198,17 @@ export default function AdminPage() {
   }, []);
 
   async function handleBlingDisconnect() {
+    if (!blingStatus) return;
     const confirmed = window.confirm(
-      "Desconectar o seu Bling deste sistema? Você pode conectar de novo quando quiser."
+      `Desconectar o Bling da loja "${blingStatus.storeName}"? Dá para conectar de novo quando quiser.`
     );
     if (!confirmed) return;
     setError(null);
-    const res = await fetch("/api/bling/disconnect", { method: "POST" });
+    const res = await fetch("/api/bling/disconnect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storeId: blingStatus.storeId })
+    });
     if (!res.ok) {
       const json = await res.json().catch(() => ({}));
       setError(json.error || "Erro ao desconectar o Bling");
@@ -357,6 +416,11 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/sku/next", { cache: "no-store" });
       const json = await res.json();
+
+      if (res.status === 403 && json.noStore) {
+        setNoStoreMessage(json.error);
+        return null;
+      }
 
       if (!res.ok) {
         throw new Error(json.error || "Erro ao gerar próximo SKU");
@@ -795,10 +859,33 @@ export default function AdminPage() {
           </div>
 
           <nav className={styles.topbarActions}>
+            {storeInfo && storeInfo.stores.length > 1 ? (
+              <label className={styles.storePicker}>
+                <span>Loja</span>
+                <select
+                  value={storeInfo.activeId}
+                  onChange={(e) => handleSwitchStore(e.target.value)}
+                  aria-label="Loja em que você está trabalhando"
+                >
+                  {storeInfo.stores.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : storeInfo && storeInfo.stores.length === 1 ? (
+              <span className={styles.storeName}>{storeInfo.stores[0].name}</span>
+            ) : null}
             {isAdmin ? (
-              <Link className={`${styles.btn} ${styles.btnGhost}`} href="/usuarios">
-                Usuários
-              </Link>
+              <>
+                <Link className={`${styles.btn} ${styles.btnGhost}`} href="/lojas">
+                  Lojas
+                </Link>
+                <Link className={`${styles.btn} ${styles.btnGhost}`} href="/usuarios">
+                  Usuários
+                </Link>
+              </>
             ) : null}
             <button
               className={`${styles.btn} ${styles.btnGhost}`}
@@ -819,6 +906,21 @@ export default function AdminPage() {
           </p>
         </section>
 
+        {noStoreMessage ? (
+          <section className={styles.card}>
+            <div className={styles.emptyState}>
+              {noStoreMessage}
+              {isAdmin ? (
+                <>
+                  <br />
+                  <Link href="/lojas" className={styles.inlineLink}>
+                    Ir para a página Lojas
+                  </Link>
+                </>
+              ) : null}
+            </div>
+          </section>
+        ) : (
         <div className={styles.grid}>
           {/* PASSO 1 — CORES */}
           <section className={styles.card}>
@@ -1144,30 +1246,37 @@ export default function AdminPage() {
                     <>
                       <span className={styles.blingDot} aria-hidden="true" />
                       <span className={styles.blingText}>
-                        <strong>Bling conectado</strong>
-                        <span>Os produtos vão direto para a sua conta.</span>
+                        <strong>Bling da loja {blingStatus.storeName} conectado</strong>
+                        <span>Os produtos vão direto para o Bling desta loja.</span>
                       </span>
-                      <button
-                        type="button"
-                        className={styles.blingLink}
-                        onClick={handleBlingDisconnect}
-                      >
-                        Desconectar
-                      </button>
+                      {blingStatus.isAdmin ? (
+                        <button
+                          type="button"
+                          className={styles.blingLink}
+                          onClick={handleBlingDisconnect}
+                        >
+                          Desconectar
+                        </button>
+                      ) : null}
                     </>
-                  ) : (
+                  ) : blingStatus.isAdmin ? (
                     <>
                       <span className={styles.blingText}>
-                        <strong>Conecte o seu Bling</strong>
+                        <strong>Conecte o Bling da loja {blingStatus.storeName}</strong>
                         <span>Para enviar produtos direto, sem baixar planilha.</span>
                       </span>
                       <a
                         className={`${styles.btn} ${styles.btnMuted} ${styles.btnSmall}`}
-                        href="/api/bling/connect"
+                        href={`/api/bling/connect?store=${encodeURIComponent(blingStatus.storeId)}&back=admin`}
                       >
-                        Conectar meu Bling
+                        Conectar Bling
                       </a>
                     </>
+                  ) : (
+                    <span className={styles.blingText}>
+                      <strong>Bling desta loja ainda não conectado</strong>
+                      <span>Peça ao administrador para conectar. Enquanto isso, use o arquivo.</span>
+                    </span>
                   )}
                 </div>
               ) : null}
@@ -1199,6 +1308,7 @@ export default function AdminPage() {
             </section>
           </div>
         </div>
+        )}
       </div>
 
       <div className={styles.toasts} aria-live="polite">

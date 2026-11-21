@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
-import { getCurrentUserId } from "@/lib/auth-users";
+import { getStoreContext } from "@/lib/stores";
 
 function toSlug(value: string): string {
   return value
@@ -14,16 +14,15 @@ function toSlug(value: string): string {
 
 export async function GET() {
   try {
-    const ownerId = await getCurrentUserId();
-    if (!ownerId) {
-      return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
-    }
+    const { ctx, response } = await getStoreContext();
+    if (response) return response;
+    const storeId = ctx.store.id;
     const supabase = getSupabaseServerClient();
 
     const { data, error } = await supabase
       .from("colors")
       .select("*")
-      .eq("owner_id", ownerId)
+      .eq("store_id", storeId)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -51,10 +50,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const ownerId = await getCurrentUserId();
-    if (!ownerId) {
-      return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
-    }
+    const { ctx, response } = await getStoreContext();
+    if (response) return response;
+    const storeId = ctx.store.id;
     const body = (await request.json()) as {
       name?: string;
       slug?: string;
@@ -78,7 +76,7 @@ export async function POST(request: NextRequest) {
       .from("colors")
       .select("*")
       .eq("slug", slug)
-      .eq("owner_id", ownerId)
+      .eq("store_id", storeId)
       .maybeSingle();
 
     if (existing) {
@@ -93,7 +91,8 @@ export async function POST(request: NextRequest) {
       .insert({
         name,
         slug,
-        owner_id: ownerId
+        store_id: storeId,
+        owner_id: ctx.user.id
       })
       .select("*")
       .single();

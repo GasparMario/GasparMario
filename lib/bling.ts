@@ -1,6 +1,6 @@
 // Integração com a API v3 do Bling (OAuth 2.0).
-// Cada usuário do sistema conecta o PRÓPRIO Bling; os tokens ficam na tabela
-// bling_connections (só o servidor acessa, com a chave secreta do Supabase).
+// Cada LOJA tem o próprio Bling (conectado por um administrador); os tokens ficam na tabela
+// bling_connections, coluna owner_id = código da loja (só o servidor acessa).
 
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 
@@ -152,7 +152,7 @@ export async function disconnect(ownerId: string) {
 async function getAccessToken(ownerId: string): Promise<string> {
   const conn = await getConnection(ownerId);
   if (!conn) {
-    throw new BlingError("Seu Bling ainda não está conectado. Clique em \"Conectar meu Bling\".", 409);
+    throw new BlingError("O Bling desta loja ainda não está conectado. Um administrador precisa conectar na página Lojas.", 409);
   }
 
   const expiresAt = new Date(conn.expires_at).getTime();
@@ -166,7 +166,7 @@ async function getAccessToken(ownerId: string): Promise<string> {
     return tokens.access_token;
   } catch {
     throw new BlingError(
-      "A conexão com o seu Bling expirou. Clique em \"Conectar meu Bling\" de novo.",
+      "A conexão com o Bling desta loja expirou. Um administrador precisa conectar de novo na página Lojas.",
       409
     );
   }
@@ -213,7 +213,7 @@ export async function blingRequest<T = unknown>(
 
     if (res.status === 401) {
       throw new BlingError(
-        "O Bling não aceitou a conexão. Clique em \"Conectar meu Bling\" de novo.",
+        "O Bling não aceitou a conexão desta loja. Um administrador precisa conectar de novo na página Lojas.",
         409,
         details
       );
