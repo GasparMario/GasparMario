@@ -164,3 +164,37 @@ export async function countStoreColors(storeId: string): Promise<number> {
     .eq("store_id", storeId);
   return count ?? 0;
 }
+
+// Prefixo do SKU da loja ("" quando não tem).
+export async function getStorePrefix(storeId: string): Promise<string> {
+  const { data, error } = await getSupabaseServerClient()
+    .from("stores")
+    .select("sku_prefix")
+    .eq("id", storeId)
+    .maybeSingle();
+  if (error || !data) return "";
+  return String((data as { sku_prefix?: string | null }).sku_prefix || "");
+}
+
+export async function getAllPrefixes(): Promise<Map<string, string>> {
+  const { data, error } = await getSupabaseServerClient().from("stores").select("id,sku_prefix");
+  const map = new Map<string, string>();
+  if (error || !data) return map;
+  for (const row of data as { id: string; sku_prefix: string | null }[]) {
+    if (row.sku_prefix) map.set(row.id, row.sku_prefix);
+  }
+  return map;
+}
+
+export async function setStorePrefix(storeId: string, prefix: string | null) {
+  const { error } = await getSupabaseServerClient()
+    .from("stores")
+    .update({ sku_prefix: prefix })
+    .eq("id", storeId);
+  if (error) {
+    if (/duplicate|unique/i.test(error.message)) {
+      throw new Error("Esse prefixo já é usado por outra loja. Escolha outro.");
+    }
+    throw new Error(`${error.message}. O comando SQL do prefixo já foi rodado no Supabase?`);
+  }
+}

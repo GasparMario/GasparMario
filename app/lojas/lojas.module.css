@@ -134,6 +134,13 @@
   align-items: start;
 }
 
+.ljPrefixInput {
+  max-width: 120px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
 .ljDeleteBtn {
   margin-left: auto;
   background: #fef2f2;

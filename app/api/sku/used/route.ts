@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { getStoreContext } from "@/lib/stores";
-import { normalizeNumericSku } from "@/lib/sku";
+import { splitSku } from "@/lib/sku";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const ownerId = ctx.store.id;
 
     const body = (await request.json()) as { sku?: string | number };
-    const sku = body.sku == null ? null : normalizeNumericSku(body.sku);
+    const sku = body.sku == null ? null : splitSku(String(body.sku))?.number ?? null;
 
     if (!sku || !Number.isSafeInteger(Number(sku))) {
       return NextResponse.json({ error: "SKU inválido." }, { status: 400 });

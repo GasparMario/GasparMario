@@ -2,7 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { listAppUsers, parseSku, setNextSku } from "@/lib/auth-users";
 import { isBlingConfigured } from "@/lib/bling";
 import { requireAdmin } from "@/lib/require-admin";
-import { createStore, getNextSkus, getStoreMembers, listAllStores } from "@/lib/stores";
+import {
+  createStore,
+  getAllPrefixes,
+  getNextSkus,
+  getStoreMembers,
+  listAllStores,
+  setStorePrefix
+} from "@/lib/stores";
+import { isValidPrefix, normalizePrefix } from "@/lib/sku";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -14,10 +22,11 @@ export async function GET() {
     const { response } = await requireAdmin();
     if (response) return response;
 
-    const [stores, members, skus, users, conns] = await Promise.all([
+    const [stores, members, skus, prefixes, users, conns] = await Promise.all([
       listAllStores(),
       getStoreMembers(),
       getNextSkus(),
+      getAllPrefixes(),
       listAppUsers(),
       getSupabaseServerClient().from("bling_connections").select("owner_id,connected_at")
     ]);
@@ -59,6 +68,7 @@ export async function GET() {
         nextSku: skus.get(s.id) ?? null,
         blingConnectedAt: connected.get(s.id) ?? null,
         colorCount: colorCounts.get(s.id) ?? 0,
+        skuPrefix: prefixes.get(s.id) ?? "",
         // Só os 4 últimos caracteres do Client ID; o Secret nunca sai do servidor.
         ownAppHint: ownApps.get(s.id) ?? null
       }))
@@ -81,6 +91,7 @@ export async function POST(request: NextRequest) {
       name?: string;
       memberIds?: string[];
       startSku?: string | number;
+      skuPrefix?: string;
     };
     const name = (body.name || "").trim();
     if (!name) return NextResponse.json({ error: "Informe o nome da loja." }, { status: 400 });
@@ -94,7 +105,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const prefix = normalizePrefix(body.skuPrefix || "");
+    if (prefix && !isValidPrefix(prefix)) {
+      return NextResponse.json(
+        { error: "O prefixo do SKU precisa ter de 2 a 5 letras (ex: RES)." },
+        { status: 400 }
+      );
+    }
+    if (prefix && Array.from((await getAllPrefixes()).values()).some((p) => p.toUpperCase() === prefix)) {
+      return NextResponse.json(
+        { error: "Esse prefixo já é usado por outra loja. Escolha outro." },
+        { status: 400 }
+      );
+    }
+
     const store = await createStore(name, body.memberIds ?? []);
+    if (prefix) await setStorePrefix(store.id, prefix);
     if (startSku) await setNextSku(store.id, startSku);
 
     return NextResponse.json({ store }, { status: 201 });

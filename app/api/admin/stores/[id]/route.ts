@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { parseSku, setNextSku } from "@/lib/auth-users";
 import { requireAdmin } from "@/lib/require-admin";
 import { disconnect } from "@/lib/bling";
-import { deleteStore, listAllStores, renameStore, setStoreMembers } from "@/lib/stores";
+import {
+  deleteStore,
+  listAllStores,
+  renameStore,
+  setStoreMembers,
+  setStorePrefix
+} from "@/lib/stores";
+import { isValidPrefix, normalizePrefix, splitSku } from "@/lib/sku";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -26,6 +33,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       blingClientId?: string;
       blingClientSecret?: string;
       removeBlingApp?: boolean;
+      skuPrefix?: string;
     };
 
     if (body.name != null) {
@@ -38,8 +46,19 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       await setStoreMembers(params.id, body.memberIds);
     }
 
+    if (body.skuPrefix != null) {
+      const prefix = normalizePrefix(body.skuPrefix);
+      if (prefix && !isValidPrefix(prefix)) {
+        return NextResponse.json(
+          { error: "O prefixo do SKU precisa ter de 2 a 5 letras (ex: RES)." },
+          { status: 400 }
+        );
+      }
+      await setStorePrefix(params.id, prefix || null);
+    }
+
     if (body.nextSku != null) {
-      const nextSku = parseSku(body.nextSku);
+      const nextSku = parseSku(splitSku(String(body.nextSku))?.number ?? "");
       if (!nextSku) {
         return NextResponse.json(
           { error: "O SKU precisa ser só números (ex: 100001)." },
