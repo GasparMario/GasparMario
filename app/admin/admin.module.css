@@ -374,6 +374,14 @@
   border-radius: 0.95rem;
 }
 
+.btnSecondaryBig {
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.8rem;
+  font-size: 0.9rem;
+  border-radius: 0.95rem;
+}
+
 /* ===== Cores ===== */
 .toolbar {
   display: flex;
